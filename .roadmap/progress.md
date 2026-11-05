@@ -1,6 +1,6 @@
 # Vue 学习路线与进度
 
-> 更新时间：2026-11-04
+> 更新时间：2026-11-05
 > 项目：`/home/tomato0v0/Projects/VueProjects/exercise`
 > 技术栈：Vue 3.5 + TypeScript + Vite + Vue Router + Pinia（pnpm 管理）
 > 启动命令：`pnpm dev`（默认 http://localhost:5173）
@@ -11,6 +11,7 @@
 - 每个小步骤包含：目的 → 具体改动 → 一个验证问题。
 - 用户是前端新手：先看现象、再看概念，避免一次抛出多个新概念。
 - 出现报错时，先读文件 / 看诊断定位原因，讲清"为什么会发生"，再给修改方案。
+- **阶段约定（2026-11-05 起）**：不再新增或修改测试相关代码；功能改动只要求 `pnpm type-check` 通过 + 浏览器手动验证。
 
 ## 总目标
 
@@ -313,6 +314,33 @@
 - 测试 `src/__tests__/confirm.spec.ts`：用"探针组件 inject"取出服务，再点真实按钮；覆盖 确定/取消/并发排队 三个场景
 - 用过变异验证：把队列改回"直接覆盖 current"，并发用例立即失败（弹窗显示“第二次”）
 
+### 第 35 步 · 抽离 `useConfirmService`
+
+- 三层职责：`useConfirm.ts`（key + `ConfirmFn` 类型）→ `useConfirmService.ts`（状态与队列实现）→ `App.vue`（接线）
+- composable 只 return 使用方需要的 4 样：`dialogOpen` / `current` / `confirm` / `answer`；`queue`、`showNext` 属于内部实现
+- 解构 composable 返回的 ref 是**安全**的（解出来仍是 ref 对象）；与 Pinia store 解构丢响应性不同
+- `provide(confirmKey, confirm)` 能否通过取决于签名匹配 `ConfirmFn`，由 `InjectionKey<T>` 把关
+- `App.vue` 从 ~58 行降到 ~22 行；现有 `confirm.spec.ts` 不用修改（测的是行为）
+
+### 第 36 步 · 简化确认服务测试
+
+- 重写 `confirm.spec.ts`：直接 `useConfirmService()`，不再挂载 App / 不再用探针组件
+- 用例：确认、取消、默认文案、并发排队（各断言 `dialogOpen` / `current` / Promise 结果）
+- 耗时从 ~64ms 降到 ~5ms；测试代码减半
+- 代价：不再覆盖 `ConfirmDialog` 的 UI 与 `provide` 连线（另开组件测试可补）
+
+### 第 37 步 · 组件测试与 api 层测试
+
+- `ConfirmDialog.spec.ts`（7 个用例）：
+  - 多数用例用 `global: { stubs: { teleport: true } }` 把 Teleport 变成本地渲染，`wrapper.find` 才能找到元素
+  - 单独一条用例**不 stub**，断言 `document.body.querySelector('.mask')`，验证真的挂到 body，unmount 后消失
+  - `@click.self` 的行为：点内部标题不触发、点遮罩触发
+  - 组件自身不关闭：点「确定」只 emit `confirm`，不 emit `update:modelValue`
+- `api.spec.ts`（5 个用例）：
+  - `vi.stubGlobal('fetch', vi.fn(...))` 替换全局 fetch，`afterEach` 里 `vi.unstubAllGlobals()` 恢复
+  - 覆盖：请求地址、字段映射（`completed` → `done`、忽略多余字段）、非 2xx 报错、JSON 异常、网络异常
+  - `await expect(promise).rejects.toThrow('...')` 测抛错
+
 ## 当前项目结构
 
 ```
@@ -326,7 +354,8 @@ src/
 ├── types.ts                 # 领域类型 Task
 ├── composables/
 │   ├── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
-│   └── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
+│   ├── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
+│   └── useConfirmService.ts # 确认服务的实现：队列 + 弹窗状态
 ├── stores/
 │   ├── counter.ts           # 脚手架自带，未使用
 │   └── tasks.ts             # 任务数据仓库（cards / total / finished / 增删改）
@@ -346,14 +375,17 @@ src/
     ├── useFilteredTasks.spec.ts # composable 筛选/搜索逻辑
     ├── storage.spec.ts          # localStorage 读写与容错
     ├── confirm.spec.ts          # 确认服务：确定/取消/并发排队
+    ├── ConfirmDialog.spec.ts    # 弹窗组件：渲染、事件、Teleport
+    ├── api.spec.ts              # api 层：mock fetch / 映射 / 错误路径
     └── TaskCard.spec.ts         # 组件渲染 + emit 契约
 ```
 
 ## 下一步
 
-1. 更多 Vue 能力：`provide`/`inject`、`Suspense`、自定义指令
-2. 进阶工程化：打包体积分析、CI、ESLint 规则收紧
-3. 真实数据持久化：把 localStorage 抽成独立存储层（或换 IndexedDB）
+1. 搜索防抖 + 筛选条件同步到 URL（`?q=买&filter=done`，刷新/分享可保留）
+2. 页面切换动画：`<Transition mode="out-in">`
+3. 自定义指令：`v-focus` 等
+4. 进阶工程化：打包体积分析、CI、ESLint 规则收紧
 
 ## 踩过的坑（备忘）
 

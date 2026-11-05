@@ -1,112 +1,58 @@
 import { describe, expect, it } from 'vitest'
-import { defineComponent, h, inject, nextTick } from 'vue'
-import { mount, type VueWrapper } from '@vue/test-utils'
-import { createPinia } from 'pinia'
-import { createMemoryHistory, createRouter } from 'vue-router'
-import App from '../App.vue'
-import { confirmKey, type ConfirmFn } from '../composables/useConfirm'
+import { useConfirmService } from '../composables/useConfirmService'
 
-const EmptyView = defineComponent({ render: () => h('div') })
+describe('useConfirmService', () => {
+  it('confirm 打开弹窗，answer(true) 后解析为 true', async () => {
+    const { dialogOpen, current, confirm, answer } = useConfirmService()
 
-let confirm: ConfirmFn | undefined
+    const result = confirm('要清空吗？', '清空')
 
-// 探针组件：挂在路由里，用来从 App 的 provide 中取出 confirm 服务
-const ProbeView = defineComponent({
-  setup() {
-    confirm = inject(confirmKey)
-    return () => h('div', 'probe')
-  },
-})
+    expect(dialogOpen.value).toBe(true)
+    expect(current.value?.message).toBe('要清空吗？')
+    expect(current.value?.confirmText).toBe('清空')
 
-function getConfirm(): ConfirmFn {
-  if (!confirm) throw new Error('confirm 服务未注入')
-  return confirm
-}
-
-function dialogButtons(): HTMLButtonElement[] {
-  return Array.from(document.querySelectorAll<HTMLButtonElement>('.dialog__actions button'))
-}
-
-async function clickConfirm() {
-  const buttons = dialogButtons()
-  expect(buttons).toHaveLength(2)
-  buttons[1]?.click()
-  await nextTick()
-}
-
-async function clickCancel() {
-  const buttons = dialogButtons()
-  expect(buttons).toHaveLength(2)
-  buttons[0]?.click()
-  await nextTick()
-}
-
-async function mountApp(): Promise<VueWrapper> {
-  confirm = undefined
-
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/', component: ProbeView },
-      { path: '/about', component: EmptyView },
-      { path: '/stats', component: EmptyView },
-    ],
-  })
-  router.push('/')
-  await router.isReady()
-
-  const wrapper = mount(App, {
-    global: { plugins: [createPinia(), router] },
-  })
-
-  await nextTick()
-  return wrapper
-}
-
-describe('confirm 服务', () => {
-  it('点「确定」时 Promise 解析为 true', async () => {
-    const wrapper = await mountApp()
-    const result = getConfirm()('要清空吗？')
-
-    await nextTick()
-    expect(document.body.textContent).toContain('要清空吗？')
-
-    await clickConfirm()
+    answer(true)
     await expect(result).resolves.toBe(true)
 
-    wrapper.unmount()
+    expect(dialogOpen.value).toBe(false)
+    expect(current.value).toBeNull()
   })
 
-  it('点「取消」时 Promise 解析为 false', async () => {
-    const wrapper = await mountApp()
-    const result = getConfirm()('要清空吗？')
+  it('answer(false) 时解析为 false', async () => {
+    const { confirm, answer } = useConfirmService()
 
-    await nextTick()
-    await clickCancel()
+    const result = confirm('要清空吗？')
+    answer(false)
+
     await expect(result).resolves.toBe(false)
+  })
 
-    wrapper.unmount()
+  it('省略确认按钮文案时默认「确定」', () => {
+    const { current, confirm } = useConfirmService()
+
+    confirm('要清空吗？')
+
+    expect(current.value?.confirmText).toBe('确定')
   })
 
   it('并发调用时排队依次处理，各自的 Promise 都拿到结果', async () => {
-    const wrapper = await mountApp()
-    const confirmFn = getConfirm()
+    const { dialogOpen, current, confirm, answer } = useConfirmService()
 
-    const first = confirmFn('第一次')
-    const second = confirmFn('第二次')
+    const first = confirm('第一次')
+    const second = confirm('第二次')
 
-    await nextTick()
-    expect(document.body.textContent).toContain('第一次')
-    expect(document.body.textContent).not.toContain('第二次')
+    expect(current.value?.message).toBe('第一次')
 
-    await clickConfirm()
+    answer(true)
     await expect(first).resolves.toBe(true)
 
-    expect(document.body.textContent).toContain('第二次')
+    expect(dialogOpen.value).toBe(true)
+    expect(current.value?.message).toBe('第二次')
 
-    await clickCancel()
+    answer(false)
     await expect(second).resolves.toBe(false)
 
-    wrapper.unmount()
+    expect(dialogOpen.value).toBe(false)
+    expect(current.value).toBeNull()
   })
 })
