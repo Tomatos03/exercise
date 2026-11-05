@@ -12,7 +12,11 @@ provide(confirmKey, confirm)
 
 <template>
   <AppShell>
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition name="fade" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </RouterView>
   </AppShell>
 
   <ConfirmDialog
@@ -23,3 +27,18 @@ provide(confirmKey, confirm)
     @cancel="answer(false)"
   />
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
+}
+</style>

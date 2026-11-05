@@ -389,16 +389,26 @@
 - 守卫改成按 `to.query.page` 加载：`loading` 放行；`loaded` 且同页放行；否则 `loadTasks(target)`
 - 翻页按钮不改，仍调 `store.loadTasks`，URL 由 watch 跟随
 
+### 第 42 步 · 页面切换过渡
+
+- `<Transition>` 只能作用于**一个直接子元素**，直接包 `<RouterView />` 无效：换页发生在壳**内部**，壳本身没变，`Transition` 抓不到
+- 用作用域插槽把真正的页面组件取出来：`<RouterView v-slot="{ Component }">`
+  - `v-slot="{ Component }"` = `v-slot="slotProps"` + ES6 对象解构，插槽对象里还有 `route` 字段
+  - 名字 `Component` 是 vue-router 定的；要换名用 `v-slot="{ Component: Page }"`
+- `<component :is="Component" />` 动态组件：`is` 决定渲染谁
+- `mode="out-in"`：旧页面先离场、新页面再进场；不写则两页交叉重叠淡入淡出
+- 动画本身靠 CSS：`fade-enter-active` / `fade-leave-active` / `fade-enter-from` / `fade-leave-to`，前缀来自 `name="fade"`
+- `scoped` 能命中页面组件根元素，因为父组件 scoped 样式会作用到子组件根节点
+
 ## 当前项目结构
 
 ```
 src/
-├── App.vue                  # 只负责用 <AppShell> 包住 <RouterView />
+├── App.vue                  # 外壳 + 确认服务接线 + 路由过渡（<Transition mode="out-in">）
 ├── main.ts                  # createApp + Pinia + Router + 全局样式
 ├── assets/main.css          # 全局基础层：reset + CSS 变量 + 基础排版
 ├── router/index.ts          # /、/about、/stats、/tasks/:id
 ├── api/tasks.ts             # fetchTasks(分页) + createTask / updateTask / deleteTask
-├── storage/tasks.ts         # localStorage 读写 + 默认种子数据
 ├── types.ts                 # 领域类型 Task
 ├── composables/
 │   ├── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
@@ -416,6 +426,7 @@ src/
 │   └── NotFoundView.vue     # 404 兜底页
 ├── components/
 │   ├── AppShell.vue         # 应用外壳：导航 + <slot />
+│   ├── ConfirmDialog.vue    # 确认弹窗（Teleport + Transition + defineModel）
 │   ├── TaskCard.vue         # 单张任务卡片（props: id / title / index / done；emits: remove / toggle）
 │   └── TaskForm.vue         # 添加任务表单（defineModel 双向绑定 + submit 事件）
 └── __tests__/
@@ -432,8 +443,8 @@ src/
 
 ## 下一步
 
-1. 页面切换动画：`<Transition mode="out-in">`，或在 Stats 页用 `store.loading` 做骨架屏
-2. 自定义指令：`v-focus` 等
+1. 自定义指令：`v-focus` 等
+2. Stats 页骨架屏（`store.loading`）
 3. 工程化：打包体积分析 / CI / ESLint 规则收紧
 
 ## 踩过的坑（备忘）
