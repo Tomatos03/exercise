@@ -1,89 +1,108 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useTaskStore } from '../stores/tasks'
+import { createTask, deleteTask, fetchTasks, updateTask } from '../api/tasks'
+
+vi.mock('../api/tasks', () => ({
+  fetchTasks: vi.fn(),
+  createTask: vi.fn(),
+  updateTask: vi.fn(),
+  deleteTask: vi.fn(),
+}))
+
+const firstPage = {
+  items: [
+    { id: 1, title: 'A', done: false },
+    { id: 2, title: 'B', done: true },
+  ],
+  total: 12,
+  page: 1,
+  pageSize: 5,
+}
 
 describe('task store', () => {
   beforeEach(() => {
-    localStorage.clear()
     setActivePinia(createPinia())
+    vi.clearAllMocks()
   })
 
-  it('新增任务', () => {
+  it('loadTasks 拉取第一页并填充状态', async () => {
+    vi.mocked(fetchTasks).mockResolvedValue(firstPage)
+
     const store = useTaskStore()
-    store.clearAll()
+    await store.loadTasks()
 
-    store.addCard('买牛奶')
-
-    expect(store.cards).toHaveLength(1)
-    expect(store.cards[0]?.title).toBe('买牛奶')
-    expect(store.cards[0]?.done).toBe(false)
+    expect(fetchTasks).toHaveBeenCalledWith(1, 5)
+    expect(store.cards).toEqual(firstPage.items)
+    expect(store.serverTotal).toBe(12)
+    expect(store.totalPages).toBe(3)
   })
 
-  it('清空后再新增，id 不重复', () => {
+  it('翻页时把目标页码传给接口', async () => {
+    vi.mocked(fetchTasks).mockResolvedValue({ ...firstPage, page: 2 })
+
     const store = useTaskStore()
-    store.clearAll()
+    await store.loadTasks(2)
 
-    store.addCard('A')
-    store.addCard('B')
-
-    const ids = store.cards.map((card) => card.id)
-    expect(new Set(ids).size).toBe(ids.length)
+    expect(fetchTasks).toHaveBeenCalledWith(2, 5)
+    expect(store.page).toBe(2)
   })
 
-  it('切换完成状态', () => {
+  it('addCard 调创建接口并追加到列表', async () => {
+    vi.mocked(createTask).mockResolvedValue({ id: 9, title: '买牛奶', done: false })
+
     const store = useTaskStore()
-    store.clearAll()
-    store.addCard('写代码')
+    await store.addCard('买牛奶')
 
-    const card = store.cards[0]
-    if (!card) throw new Error('卡片不存在')
-
-    store.toggleCard(card.id)
-
-    expect(card.done).toBe(true)
+    expect(createTask).toHaveBeenCalledWith('买牛奶')
+    expect(store.cards).toEqual([{ id: 9, title: '买牛奶', done: false }])
+    expect(store.serverTotal).toBe(1)
   })
 
-  it('删除指定 id 的任务', () => {
+  it('removeCard 调删除接口并移除卡片', async () => {
+    vi.mocked(fetchTasks).mockResolvedValue(firstPage)
+    vi.mocked(deleteTask).mockResolvedValue(undefined)
+
     const store = useTaskStore()
-    store.clearAll()
-    store.addCard('要删的')
-    store.addCard('要留的')
+    await store.loadTasks()
+    await store.removeCard(1)
 
-    const target = store.cards[0]
-    if (!target) throw new Error('卡片不存在')
-
-    store.removeCard(target.id)
-
-    expect(store.cards).toHaveLength(1)
-    expect(store.cards[0]?.title).toBe('要留的')
+    expect(deleteTask).toHaveBeenCalledWith(1)
+    expect(store.cards.map((card) => card.id)).toEqual([2])
+    expect(store.serverTotal).toBe(11)
   })
 
-  it('重命名任务', () => {
+  it('toggleCard 调更新接口并同步完成状态', async () => {
+    vi.mocked(fetchTasks).mockResolvedValue(firstPage)
+    vi.mocked(updateTask).mockResolvedValue({ id: 1, title: 'A', done: true })
+
     const store = useTaskStore()
-    store.clearAll()
-    store.addCard('旧标题')
+    await store.loadTasks()
+    await store.toggleCard(1)
 
-    const card = store.cards[0]
-    if (!card) throw new Error('卡片不存在')
+    expect(updateTask).toHaveBeenCalledWith(1, { done: true })
+    expect(store.cards[0]?.done).toBe(true)
+  })
 
-    store.renameCard(card.id, '新标题')
+  it('renameCard 调更新接口并同步标题', async () => {
+    vi.mocked(fetchTasks).mockResolvedValue(firstPage)
+    vi.mocked(updateTask).mockResolvedValue({ id: 1, title: '新标题', done: false })
 
+    const store = useTaskStore()
+    await store.loadTasks()
+    await store.renameCard(1, '新标题')
+
+    expect(updateTask).toHaveBeenCalledWith(1, { title: '新标题' })
     expect(store.cards[0]?.title).toBe('新标题')
   })
 
-  it('total / finished 随数据自动更新', () => {
+  it('请求失败时记录错误且不改动列表', async () => {
+    vi.mocked(createTask).mockRejectedValue(new Error('请求失败：500'))
+
     const store = useTaskStore()
-    store.clearAll()
-    store.addCard('A')
-    store.addCard('B')
+    await store.addCard('买牛奶')
 
-    expect(store.total).toBe(2)
-    expect(store.finished).toBe(0)
-
-    const second = store.cards[1]
-    if (!second) throw new Error('卡片不存在')
-    store.toggleCard(second.id)
-
-    expect(store.finished).toBe(1)
+    expect(store.error).toBe('请求失败：500')
+    expect(store.cards).toHaveLength(0)
   })
 })

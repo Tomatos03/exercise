@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onUnmounted, ref, watch } from 'vue'
+import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 import { useTaskStore } from '../stores/tasks'
 import TaskCard from '../components/TaskCard.vue'
@@ -94,11 +94,25 @@ function addCard() {
   content.value = ''
 }
 
+// 分页只对服务端数据生效（serverTotal > 0 时）
+function prevPage() {
+  store.loadTasks(store.page - 1)
+}
+
+function nextPage() {
+  store.loadTasks(store.page + 1)
+}
+
 async function handleClear() {
   if (!confirm) return
   const ok = await confirm('确定清空全部任务吗？这个操作不可撤销。', '清空')
   if (ok) store.clearAll()
 }
+
+// 进入页面时拉取第一页数据
+onMounted(() => {
+  store.loadTasks()
+})
 
 // 清理
 onUnmounted(() => {
@@ -128,23 +142,31 @@ onUnmounted(() => {
         :key="item.id"
         :id="item.id"
         :title="item.title"
-        :index="index"
+        :index="(store.page - 1) * store.pageSize + index"
         :done="item.done"
         @remove="store.removeCard(item.id)"
         @toggle="store.toggleCard(item.id)"
       />
     </TransitionGroup>
 
+    <div v-if="store.totalPages > 1" class="todo__pager">
+      <button :disabled="store.page === 1" @click="prevPage">上一页</button>
+      <span>{{ store.page }} / {{ store.totalPages }}</span>
+      <button :disabled="store.page === store.totalPages" @click="nextPage">下一页</button>
+    </div>
+
     <TaskForm v-model="content" @submit="addCard" />
 
     <div class="todo__actions">
-      <button @click="store.loadTasks">从服务器加载</button>
+      <button @click="store.loadTasks()">从服务器加载</button>
       <button @click="handleClear">清空全部</button>
     </div>
 
     <p v-if="store.loading" class="todo__hint">加载中…</p>
     <p v-if="store.error" class="todo__error">{{ store.error }}</p>
-    <p class="todo__summary">共 {{ store.total }} 张，已完成 {{ store.finished }} 张</p>
+    <p class="todo__summary">
+      共 {{ store.serverTotal || store.total }} 张，已完成 {{ store.finished }} 张
+    </p>
   </section>
 </template>
 
@@ -184,6 +206,15 @@ onUnmounted(() => {
 .todo__actions {
   display: flex;
   gap: var(--space-2);
+}
+
+.todo__pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--color-muted);
+  font-size: 0.875rem;
 }
 
 .todo__empty,

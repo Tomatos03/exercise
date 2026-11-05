@@ -355,6 +355,18 @@
 - 关键认知：**地址栏回车 = 整页重载**（setup 重跑）；页面内改 query 不重载，所以需要 B5
 - 防抖放在页面而非 composable：否则 `useFilteredTasks` 的 5 个用例都要引入假定时器
 
+### 第 39 步 · 接入真实（本地）后端
+
+- `pnpm add -D json-server@0.17.4` + `db.json`（7 条 todos）+ `pnpm mock` 脚本；`.env` 指向 `http://localhost:3001`
+- json-server 支持 `_page` / `_limit`，并在响应头返回 `X-Total-Count`（已验证），与现有分页代码对得上
+- `api/tasks.ts`：抽出 `toTask` / `ensureOk`，新增 `createTask` / `updateTask` / `deleteTask`
+- `stores/tasks.ts`：所有操作改为异步调接口；`cards` 初始为空，只代表当前页；错误用 `run()` 统一收口
+- `TodoView.vue`：`onMounted` 自动拉取第一页
+- **删除 `src/storage/`**（含测试）：localStorage 不再作为数据源
+- `tasks.spec.ts` 改为 `vi.mock('../api/tasks')` + `await`，测"store 怎么调接口、怎么更新状态"
+- 遗留：直接访问 `/stats` 时 `cards` 为空（数据在待办页才加载）→ 下一步把加载提到 `App.vue` 或路由守卫
+- 开发时必须开两个终端：`pnpm mock` + `pnpm dev`
+
 ## 当前项目结构
 
 ```
@@ -363,7 +375,7 @@ src/
 ├── main.ts                  # createApp + Pinia + Router + 全局样式
 ├── assets/main.css          # 全局基础层：reset + CSS 变量 + 基础排版
 ├── router/index.ts          # /、/about、/stats、/tasks/:id
-├── api/tasks.ts             # fetchTasks：URL + HTTP 判断 + 字段映射
+├── api/tasks.ts             # fetchTasks(分页) + createTask / updateTask / deleteTask
 ├── storage/tasks.ts         # localStorage 读写 + 默认种子数据
 ├── types.ts                 # 领域类型 Task
 ├── composables/
@@ -390,16 +402,17 @@ src/
     ├── storage.spec.ts          # localStorage 读写与容错
     ├── confirm.spec.ts          # 确认服务：确定/取消/并发排队
     ├── ConfirmDialog.spec.ts    # 弹窗组件：渲染、事件、Teleport
-    ├── api.spec.ts              # api 层：mock fetch / 映射 / 错误路径
+    ├── api.spec.ts              # api 层：mock fetch / 分页 / 映射 / 错误路径
+    ├── tasks.spec.ts            # store：mock api 模块，验证调接口与状态更新
     └── TaskCard.spec.ts         # 组件渲染 + emit 契约
 ```
 
 ## 下一步
 
-1. 分页或视图切换（`?page=` / `?view=`），复用 `readListQuery` / `buildListQuery` 模式
-2. 页面切换动画：`<Transition mode="out-in">`
-3. 自定义指令：`v-focus` 等
-4. 进阶工程化：打包体积分析、CI、ESLint 规则收紧
+1. 把 `loadTasks()` 提到 `App.vue` 或路由守卫，修复直接访问 `/stats` 无数据的回归
+2. 把 `page` 同步到 URL（复用 `readListQuery` / `buildListQuery`）
+3. 页面切换动画：`<Transition mode="out-in">`
+4. 自定义指令：`v-focus` 等；工程化：打包体积分析 / CI
 
 ## 踩过的坑（备忘）
 

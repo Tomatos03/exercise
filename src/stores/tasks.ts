@@ -1,58 +1,85 @@
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { fetchTasks } from '../api/tasks'
-import { loadTasksFromStorage, saveTasksToStorage } from '../storage/tasks'
+import { createTask, deleteTask, fetchTasks, updateTask } from '../api/tasks'
 import type { Task } from '../types'
 
 export const useTaskStore = defineStore('tasks', () => {
-  const cards = ref<Task[]>(loadTasksFromStorage())
+  const cards = ref<Task[]>([])
   const loading = ref(false)
   const error = ref('')
 
+  // 服务端分页状态：cards 只代表「当前页」的数据
+  const page = ref(1)
+  const pageSize = ref(5)
+  const serverTotal = ref(0)
+
   const total = computed(() => cards.value.length)
   const finished = computed(() => cards.value.filter((card) => card.done).length)
+  const totalPages = computed(() => Math.max(1, Math.ceil(serverTotal.value / pageSize.value)))
 
-  function nextId() {
-    return cards.value.reduce((max, card) => Math.max(max, card.id), 0) + 1
-  }
-
-  function addCard(title: string) {
-    cards.value.push({ id: nextId(), title, done: false })
-  }
-
-  function removeCard(id: number) {
-    cards.value = cards.value.filter((card) => card.id !== id)
-  }
-
-  function toggleCard(id: number) {
-    const card = cards.value.find((card) => card.id === id)
-    if (!card) return
-    card.done = !card.done
-  }
-
-  function renameCard(id: number, title: string) {
-    const card = cards.value.find((card) => card.id === id)
-    if (!card) return
-    card.title = title
-  }
-
-  function clearAll() {
-    cards.value = []
-  }
-
-  async function loadTasks() {
-    loading.value = true
+  /** 统一收口请求错误，避免每个操作都写一遍 try/catch */
+  async function run(action: () => Promise<void>) {
     error.value = ''
     try {
-      cards.value = await fetchTasks()
+      await action()
     } catch (e) {
       error.value = e instanceof Error ? e.message : '未知错误'
-    } finally {
-      loading.value = false
     }
   }
 
-  watch(cards, (value) => saveTasksToStorage(value), { deep: true })
+  async function loadTasks(targetPage = page.value) {
+    loading.value = true
+    await run(async () => {
+      const result = await fetchTasks(targetPage, pageSize.value)
+      cards.value = result.items
+      page.value = result.page
+      serverTotal.value = result.total
+    })
+    loading.value = false
+  }
+
+  function addCard(title: string) {
+    return run(async () => {
+      const created = await createTask(title)
+      cards.value.push(created)
+      serverTotal.value += 1
+    })
+  }
+
+  function removeCard(id: number) {
+    return run(async () => {
+      await deleteTask(id)
+      cards.value = cards.value.filter((card) => card.id !== id)
+      serverTotal.value = Math.max(0, serverTotal.value - 1)
+    })
+  }
+
+  function toggleCard(id: number) {
+    const card = cards.value.find((item) => item.id === id)
+    if (!card) return Promise.resolve()
+
+    return run(async () => {
+      const updated = await updateTask(id, { done: !card.done })
+      card.done = updated.done
+    })
+  }
+
+  function renameCard(id: number, title: string) {
+    return run(async () => {
+      const updated = await updateTask(id, { title })
+      const card = cards.value.find((item) => item.id === id)
+      if (card) card.title = updated.title
+    })
+  }
+
+  function clearAll() {
+    return run(async () => {
+      const ids = cards.value.map((card) => card.id)
+      await Promise.all(ids.map((id) => deleteTask(id)))
+      cards.value = []
+      serverTotal.value = Math.max(0, serverTotal.value - ids.length)
+    })
+  }
 
   return {
     cards,
@@ -66,5 +93,9 @@ export const useTaskStore = defineStore('tasks', () => {
     loadTasks,
     error,
     renameCard,
+    page,
+    pageSize,
+    serverTotal,
+    totalPages,
   }
 })

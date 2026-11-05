@@ -14,6 +14,7 @@
 
 ```sh
 pnpm dev          # 开发服务器，默认 http://localhost:5173
+pnpm mock         # json-server 假后端，http://localhost:3001（开发时另开一个终端）
 pnpm build        # 类型检查 + 生产构建
 pnpm type-check   # vue-tsc 类型检查
 pnpm test:unit    # Vitest（jsdom 环境，监听模式）
@@ -43,7 +44,6 @@ src/
 ├── assets/main.css        # 全局基础层：reset + CSS 变量 + 基础排版
 ├── router/index.ts        # 路由表，页面组件一律懒加载
 ├── api/                   # 网络请求（一个领域一个文件，不依赖 store）
-├── storage/               # 本地持久化（localStorage 读写，不依赖 store）
 ├── composables/           # 可复用逻辑（useXxx.ts）
 ├── types.ts               # 跨层共享的领域类型（如 Task）
 ├── views/                 # 页面级组件，一个路由一个文件（*View.vue）
@@ -56,7 +56,6 @@ src/
 - 新增可复用 UI：`src/components/Xxx.vue`，通过 props 接收数据、通过 emits 通知父级。
 - 新增跨页面数据：放进 `src/stores/`，不要在页面之间互相 import。
 - 新增接口请求：写进 `src/api/`，返回业务类型；store 只调用，不写 `fetch` 细节。
-- 新增本地持久化：写进 `src/storage/`；store 里不出现 `localStorage` / `JSON` 细节。
 
 ## 代码风格
 
@@ -83,6 +82,9 @@ src/
    已有的 37 个用例保持原样通过即可，不需要跟着功能演进。
    **测试与需求冲突时：调整实现以保持旧行为**，不要为了新功能去修改/删除已有用例；
    如果确实无法保持旧行为，先停下来询问用户。
+10. **数据一律以后端为准**（2026-11-05 起）：列表与增删改都通过 `src/api/` 的真实 HTTP 请求完成，
+    开发期用 `pnpm mock`（json-server，http://localhost:3001）。store 不维护本地假数据，
+    也不再使用 localStorage 当数据源。
 
 ## 面向代理的工作方式
 
