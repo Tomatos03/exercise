@@ -7,6 +7,7 @@ export const useTaskStore = defineStore('tasks', () => {
   const cards = ref<Task[]>([])
   const loading = ref(false)
   const error = ref('')
+  const loaded = ref(false)
 
   // 服务端分页状态：cards 只代表「当前页」的数据
   const page = ref(1)
@@ -34,6 +35,7 @@ export const useTaskStore = defineStore('tasks', () => {
       cards.value = result.items
       page.value = result.page
       serverTotal.value = result.total
+      loaded.value = true
     })
     loading.value = false
   }
@@ -97,5 +99,6 @@ export const useTaskStore = defineStore('tasks', () => {
     pageSize,
     serverTotal,
     totalPages,
+    loaded,
   }
 })

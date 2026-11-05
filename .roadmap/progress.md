@@ -367,6 +367,18 @@
 - 遗留：直接访问 `/stats` 时 `cards` 为空（数据在待办页才加载）→ 下一步把加载提到 `App.vue` 或路由守卫
 - 开发时必须开两个终端：`pnpm mock` + `pnpm dev`
 
+### 第 40 步 · 用路由守卫保证数据已加载
+
+- `stores/tasks.ts` 增加 `loaded`：**仅加载成功后**置 `true`（失败时下次导航可重试）
+- `router/index.ts` 增加 `beforeEach`：`loaded || loading` 则直接放行，否则触发 `store.loadTasks()`
+- **不 `await`**：导航不阻塞，数据回来后页面自动更新（代价：Stats 可能先显示 0）
+- 移除 `TodoView` 的 `onMounted` 加载，避免职责重叠
+- 为什么用守卫而非 `App.vue` 的 `onMounted`：
+  - 测试不受影响（`App.spec` 用自建 router）
+  - 守卫拿得到 `to.query`，为下一步 `?page=` 同步做准备
+  - 新增页面自动覆盖
+- 为什么用 `loaded` 而不是 `cards.length > 0`：任务被清空后 `cards` 合法为空，否则每次导航都会重复请求
+
 ## 当前项目结构
 
 ```
@@ -409,10 +421,9 @@ src/
 
 ## 下一步
 
-1. 把 `loadTasks()` 提到 `App.vue` 或路由守卫，修复直接访问 `/stats` 无数据的回归
-2. 把 `page` 同步到 URL（复用 `readListQuery` / `buildListQuery`）
-3. 页面切换动画：`<Transition mode="out-in">`
-4. 自定义指令：`v-focus` 等；工程化：打包体积分析 / CI
+1. 把 `page` 同步到 URL（复用 `readListQuery` / `buildListQuery`，并在守卫里按 `to.query.page` 加载）
+2. 页面切换动画：`<Transition mode="out-in">`
+3. 自定义指令：`v-focus` 等；工程化：打包体积分析 / CI
 
 ## 踩过的坑（备忘）
 

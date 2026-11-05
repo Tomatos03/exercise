@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { inject, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
 import { useTaskStore } from '../stores/tasks'
 import TaskCard from '../components/TaskCard.vue'
@@ -108,11 +108,6 @@ async function handleClear() {
   const ok = await confirm('确定清空全部任务吗？这个操作不可撤销。', '清空')
   if (ok) store.clearAll()
 }
-
-// 进入页面时拉取第一页数据
-onMounted(() => {
-  store.loadTasks()
-})
 
 // 清理
 onUnmounted(() => {
