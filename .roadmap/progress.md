@@ -379,6 +379,16 @@
   - 新增页面自动覆盖
 - 为什么用 `loaded` 而不是 `cards.length > 0`：任务被清空后 `cards` 合法为空，否则每次导航都会重复请求
 
+### 第 41 步 · 页码同步到 URL
+
+- 新建 `src/composables/useListQuery.ts`：`readListQuery` / `buildListQuery` / `parsePage` 共享，`TodoView` 与路由守卫共用一套规则
+- `parsePage`：`?page=abc` / `0` / 负数 / 小数一律落到 1
+- `buildListQuery` 中 `page <= 1` 不写进 URL（默认值不污染地址栏）
+- 挂载规范化必须用 `initialQuery.page`，不能用 `store.page`（守卫还在异步加载目标页，否则会抹掉 `?page=3`）
+- 写回 watch 监听 `[filter, keyword, () => store.page]`（Pinia 的值不是 ref，要包成 getter），并用 `resolve().fullPath` 比较，避免多余导航
+- 守卫改成按 `to.query.page` 加载：`loading` 放行；`loaded` 且同页放行；否则 `loadTasks(target)`
+- 翻页按钮不改，仍调 `store.loadTasks`，URL 由 watch 跟随
+
 ## 当前项目结构
 
 ```
@@ -393,7 +403,8 @@ src/
 ├── composables/
 │   ├── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
 │   ├── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
-│   └── useConfirmService.ts # 确认服务的实现：队列 + 弹窗状态
+│   ├── useConfirmService.ts # 确认服务的实现：队列 + 弹窗状态
+│   └── useListQuery.ts      # URL ↔ 列表状态（q / filter / page）互转
 ├── stores/
 │   ├── counter.ts           # 脚手架自带，未使用
 │   └── tasks.ts             # 任务数据仓库（cards / total / finished / 增删改）
@@ -421,9 +432,9 @@ src/
 
 ## 下一步
 
-1. 把 `page` 同步到 URL（复用 `readListQuery` / `buildListQuery`，并在守卫里按 `to.query.page` 加载）
-2. 页面切换动画：`<Transition mode="out-in">`
-3. 自定义指令：`v-focus` 等；工程化：打包体积分析 / CI
+1. 页面切换动画：`<Transition mode="out-in">`，或在 Stats 页用 `store.loading` 做骨架屏
+2. 自定义指令：`v-focus` 等
+3. 工程化：打包体积分析 / CI / ESLint 规则收紧
 
 ## 踩过的坑（备忘）
 

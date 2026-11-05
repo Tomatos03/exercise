@@ -1,40 +1,12 @@
 <script setup lang="ts">
 import { inject, onUnmounted, ref, watch } from 'vue'
-import { useRoute, useRouter, type LocationQuery, type LocationQueryRaw } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useTaskStore } from '../stores/tasks'
 import TaskCard from '../components/TaskCard.vue'
 import TaskForm from '@/components/TaskForm.vue'
-import { useFilteredTasks, type Filter } from '@/composables/useFilteredTasks'
+import { useFilteredTasks } from '@/composables/useFilteredTasks'
 import { confirmKey } from '@/composables/useConfirm'
-
-// 纯工具
-function readQueryString(value: unknown): string {
-  return typeof value === 'string' ? value : ''
-}
-
-function parseFilter(value: string): Filter {
-  return value === 'active' || value === 'done' ? value : 'all'
-}
-
-interface ListQuery {
-  keyword: string
-  filter: Filter
-}
-
-function readListQuery(query: LocationQuery): ListQuery {
-  return {
-    keyword: readQueryString(query.q).trim(),
-    filter: parseFilter(readQueryString(query.filter).trim()),
-  }
-}
-
-function buildListQuery(state: ListQuery, base: LocationQuery = {}): LocationQueryRaw {
-  return {
-    ...base,
-    q: state.keyword === '' ? undefined : state.keyword,
-    filter: state.filter === 'all' ? undefined : state.filter,
-  }
-}
+import { buildListQuery, readListQuery } from '@/composables/useListQuery'
 
 // 外部依赖
 const store = useTaskStore()
@@ -53,7 +25,15 @@ const content = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 
 // 规范化地址栏, 防止用户手动输入不规范的查询参数
-const normalizedQuery = buildListQuery({ keyword: keyword.value, filter: filter.value }, route.query)
+// 注意：page 用 initialQuery.page，不能用 store.page（守卫还在异步加载目标页）
+const normalizedQuery = buildListQuery(
+  {
+    keyword: initialQuery.keyword,
+    filter: initialQuery.filter,
+    page: initialQuery.page,
+  },
+  route.query,
+)
 if (router.resolve({ query: normalizedQuery }).fullPath !== route.fullPath) {
   router.replace({ query: normalizedQuery })
 }
@@ -66,11 +46,17 @@ watch(searchInput, (value) => {
   }, 300)
 })
 
-// 过滤条件 or 关键字变化时同步URL查询参数
-watch([filter, keyword], () => {
-  router.replace({
-    query: buildListQuery({ keyword: keyword.value.trim(), filter: filter.value }, route.query),
-  })
+// 过滤条件 / 关键字 / 页码变化时同步 URL 查询参数
+watch([filter, keyword, () => store.page], () => {
+  const next = buildListQuery(
+    { keyword: keyword.value.trim(), filter: filter.value, page: store.page },
+    route.query,
+  )
+
+  // 地址已经一致就不跳，避免多余导航
+  if (router.resolve({ query: next }).fullPath === route.fullPath) return
+
+  router.replace({ query: next })
 })
 
 // 处理非url地址回车的跳转情况
