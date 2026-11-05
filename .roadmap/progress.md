@@ -234,6 +234,75 @@
 - 路由匹配是"整段锚定"，比普通 `regex.test` 严格
 - "路由不存在"（404 页）与"路由存在但数据不存在"（页面空状态）是两回事
 
+### 第 26 步 · 自定义弹窗（Teleport + Transition）
+
+- `<Teleport to="body">`：把 DOM 搬到 `body` 下，绕开父级 `overflow` / `transform` / `z-index` 限制；**scoped 样式仍生效**（`data-v` 属性没变）
+- `<Transition name="fade">`：靠 `v-if` 切换触发；只包一个元素（多个用 `TransitionGroup`）；`name` 只决定 class 前缀，**没有内置动画**，CSS 要自己写
+- 类名规律：`*-enter-from` 是看不见的起点，`*-enter-active` 放 `transition` 属性
+- 嵌套顺序：**Teleport 在外、Transition 在内**更稳；`v-if` 必须放在 Transition 的直接子元素上
+- `@click.self`：只有点遮罩本身才触发，点对话框内部不冒泡触发
+- `ConfirmDialog`：`defineModel` 控制显隐 + `confirm` / `cancel` 两个事件
+- 异步守卫：`onBeforeRouteLeave` 可返回 Promise；用 `new Promise` 把"未来的点击"变成可 await 的值
+  - 忘了调用 `resolve` → 导航永远挂起（所以遮罩关闭也要 resolve(false)）
+  - 回调不是 `async` 时不能 `await`，直接 `return askLeave()` 即可
+- 坑：忘了 `import ConfirmDialog` 时，`vue-tsc` 不报错（没开 `strictTemplates`），只在运行时警告 `Failed to resolve component`
+
+### 第 27 步 · 环境变量
+
+- `.env` 里写 `VITE_API_BASE_URL`，`api/tasks.ts` 用 `import.meta.env.VITE_API_BASE_URL` 拼地址
+- **只有 `VITE_` 前缀才会暴露给前端代码**；构建时**静态替换**，改完必须重启 dev / 重新 build
+- 前端环境变量永远不是秘密（会进 `dist/assets/*.js`），密钥必须放后端
+- `.env` 入库；`.env.local` 被 `.gitignore` 的 `*.local` 排除；优先级 `.env` < `.env.local` < `.env.[mode]` < `.env.[mode].local`
+- `env.d.ts` 补 `interface ImportMetaEnv`；`.d.ts` = 只声明、不产出 JS
+- 坑：`.d.ts` 里一旦出现 `import`/`export` 就变成模块，全局声明失效（需 `declare global`）
+
+### 第 28 步 · 列表动画 `TransitionGroup`
+
+- `<Transition>` 只能包一个元素；列表用 `<TransitionGroup tag="div" name="list">`
+- `:key` 是硬性要求：靠它判断"新增 / 移除 / 移动"
+- 比 Transition 多一个 `*-move` 类名，专门做"重排滑动"
+- 常用三件套：
+  - `enter` / `leave` 用 `opacity` + `transform`
+  - `.list-leave-active { position: absolute; width: 100% }` 让离场卡片脱流，剩余卡片才平滑移动（容器需 `position: relative`）
+- `scoped` 样式能命中子组件的**根元素**（父组件的 scope id 会加到子组件根节点）
+
+### 第 29 步 · 开启 `strictTemplates`
+
+- `tsconfig.app.json` **顶层**（不在 `compilerOptions` 里）加 `"vueCompilerOptions": { "strictTemplates": true }`
+- 效果：模板里的组件名拼错、忘 `import`、props / 事件类型不对，`pnpm type-check` 直接报错
+- 开启后本项目无新增错误，验证了现有模板写法是干净的
+
+### 第 30 步 · 清理死代码
+
+- `TodoView.vue` 删掉 `.todo__form` / `.todo__form input`（表单已抽到 `TaskForm`）
+- `AGENTS.md` 删掉已不存在的 `stores/counter.ts` 说明，并更新 `App.vue` / `main.ts` 的职责描述
+- 检查结论：`main.css` 的 CSS 变量均在被使用；其余组件 `scoped` 样式都有对应元素
+
+### 第 31 步 · 抽离存储层
+
+- 新建 `src/storage/tasks.ts`：`loadTasksFromStorage()` / `saveTasksToStorage()`
+- 默认种子数据用**函数** `createDefaultTasks()` 返回，不能用共享常量（否则 `push` 会污染默认值）
+- `stores/tasks.ts` 里不再出现 `localStorage` / `STORAGE_KEY` / `JSON`
+- 三层职责：storage（存哪）→ store（怎么变）→ 组件（怎么显示）
+- 以后换 IndexedDB 或后端同步，只改 `storage/tasks.ts`
+
+### 第 32 步 · 存储层测试
+
+- 新建 `src/__tests__/storage.spec.ts`，4 个用例：默认值、写入后读回、数据损坏回退、每次返回独立数组
+- `beforeEach` 里 `localStorage.clear()`，用例之间不串数据
+- 用 `toEqual` 比较对象数组；取下标后写 `?.`
+- 最后一条用例反过来证明"默认值用函数而不是常量"是必要的
+
+### 第 33 步 · 用 provide/inject 抽离确认服务
+
+- 新建 `src/composables/useConfirm.ts`：`export const confirmKey: InjectionKey<ConfirmFn> = Symbol('confirm')`
+- **没有注册表**，靠 key 的引用相等匹配；所以 key 必须定义在一处、双方都 import
+- `App.vue` 持有 `dialogOpen` / `message` / `resolver`，`provide(confirmKey, confirmFn)`，并只渲染一次 `<ConfirmDialog>`
+- **插槽内容属于父组件作用域**：provide 必须放在真正的共同祖先（`App.vue`），放 `AppShell` 里拿不到
+- 使用方：`const confirm = inject(confirmKey)`，类型是 `ConfirmFn | undefined`，要判空
+- `TodoView` 的 `handleClear` 与 `TaskDetailView` 的离开守卫都改成 `await confirm(...)`
+- 已知缺陷：`resolver` 只有一个，并发调用会覆盖（第一个 await 永不结束）
+
 ## 当前项目结构
 
 ```
@@ -243,9 +312,11 @@ src/
 ├── assets/main.css          # 全局基础层：reset + CSS 变量 + 基础排版
 ├── router/index.ts          # /、/about、/stats、/tasks/:id
 ├── api/tasks.ts             # fetchTasks：URL + HTTP 判断 + 字段映射
+├── storage/tasks.ts         # localStorage 读写 + 默认种子数据
 ├── types.ts                 # 领域类型 Task
 ├── composables/
-│   └── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
+│   ├── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
+│   └── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
 ├── stores/
 │   ├── counter.ts           # 脚手架自带，未使用
 │   └── tasks.ts             # 任务数据仓库（cards / total / finished / 增删改）
@@ -263,14 +334,15 @@ src/
     ├── App.spec.ts              # App 外壳渲染（需手动注入 pinia + router）
     ├── tasks.spec.ts            # store 增删改查与派生数据
     ├── useFilteredTasks.spec.ts # composable 筛选/搜索逻辑
+    ├── storage.spec.ts          # localStorage 读写与容错
     └── TaskCard.spec.ts         # 组件渲染 + emit 契约
 ```
 
 ## 下一步
 
-1. 自定义弹窗：`Teleport` + `Transition`，替掉 `window.confirm`
-2. 更多 Vue 能力：`provide`/`inject`、`Suspense`、自定义指令
-3. 进阶工程化：环境变量（API 地址）、打包体积分析、CI
+1. 更多 Vue 能力：`provide`/`inject`、`Suspense`、自定义指令
+2. 进阶工程化：打包体积分析、CI、ESLint 规则收紧
+3. 真实数据持久化：把 localStorage 抽成独立存储层（或换 IndexedDB）
 
 ## 踩过的坑（备忘）
 

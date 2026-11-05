@@ -1,10 +1,11 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { fetchTasks } from '../api/tasks'
+import { loadTasksFromStorage, saveTasksToStorage } from '../storage/tasks'
 import type { Task } from '../types'
 
 export const useTaskStore = defineStore('tasks', () => {
-  const cards = ref<Task[]>(loadCards())
+  const cards = ref<Task[]>(loadTasksFromStorage())
   const loading = ref(false)
   const error = ref('')
 
@@ -51,7 +52,7 @@ export const useTaskStore = defineStore('tasks', () => {
     }
   }
 
-  watch(cards, (value) => localStorage.setItem(STORAGE_KEY, JSON.stringify(value)), { deep: true })
+  watch(cards, (value) => saveTasksToStorage(value), { deep: true })
 
   return {
     cards,
@@ -67,21 +68,3 @@ export const useTaskStore = defineStore('tasks', () => {
     renameCard,
   }
 })
-
-const STORAGE_KEY = 'tasks'
-
-function loadCards(): Task[] {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  if (raw) {
-    try {
-      return JSON.parse(raw) as Task[]
-    } catch {
-      return []
-    }
-  }
-  return [
-    { id: 1, title: 'A', done: false },
-    { id: 2, title: 'B', done: false },
-    { id: 3, title: 'C', done: false },
-  ]
-}

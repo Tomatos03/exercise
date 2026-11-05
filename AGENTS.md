@@ -38,10 +38,12 @@ pnpm format       # Prettier 格式化 src/
 
 ```
 src/
-├── App.vue                # 外壳：导航栏 + <RouterView />
-├── main.ts                # createApp + Pinia + Router
+├── App.vue                # 只负责用 <AppShell> 包住 <RouterView />
+├── main.ts                # createApp + Pinia + Router + 全局样式
+├── assets/main.css        # 全局基础层：reset + CSS 变量 + 基础排版
 ├── router/index.ts        # 路由表，页面组件一律懒加载
 ├── api/                   # 网络请求（一个领域一个文件，不依赖 store）
+├── storage/               # 本地持久化（localStorage 读写，不依赖 store）
 ├── composables/           # 可复用逻辑（useXxx.ts）
 ├── types.ts               # 跨层共享的领域类型（如 Task）
 ├── views/                 # 页面级组件，一个路由一个文件（*View.vue）
@@ -54,7 +56,7 @@ src/
 - 新增可复用 UI：`src/components/Xxx.vue`，通过 props 接收数据、通过 emits 通知父级。
 - 新增跨页面数据：放进 `src/stores/`，不要在页面之间互相 import。
 - 新增接口请求：写进 `src/api/`，返回业务类型；store 只调用，不写 `fetch` 细节。
-- `src/stores/counter.ts` 是脚手架遗留，当前未使用。
+- 新增本地持久化：写进 `src/storage/`；store 里不出现 `localStorage` / `JSON` 细节。
 
 ## 代码风格
 

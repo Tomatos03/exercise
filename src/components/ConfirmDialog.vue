@@ -6,10 +6,11 @@ defineProps<{
   confirmText?: string
 }>()
 
-const emit = defineEmits<{ confirm: [] }>()
+const emit = defineEmits<{ confirm: []; cancel: [] }>()
 
 function cancel() {
   open.value = false
+  emit('cancel')
 }
 </script>
 

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { useTaskStore } from '../stores/tasks'
+import { confirmKey } from '../composables/useConfirm'
 
 const route = useRoute()
 const store = useTaskStore()
+const confirm = inject(confirmKey)
 
 const id = computed(() => Number(route.params.id))
 const task = computed(() => store.cards.find((card) => card.id === id.value))
@@ -20,9 +22,10 @@ watch(
   { immediate: true },
 )
 
-onBeforeRouteLeave(() => {
+onBeforeRouteLeave(async () => {
   if (!isDirty.value) return true
-  return window.confirm('标题还没保存，确定离开吗？')
+  if (!confirm) return true
+  return await confirm('标题还没保存，确定离开吗？', '离开')
 })
 
 function save() {

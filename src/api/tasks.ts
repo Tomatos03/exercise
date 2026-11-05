@@ -6,7 +6,8 @@ interface RemoteTask {
   completed: boolean
 }
 
-const TASKS_URL = 'https://jsonplaceholder.typicode.com/todos?_limit=5'
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
+const TASKS_URL = `${BASE_URL}/todos?_limit=5`
 
 export async function fetchTasks(): Promise<Task[]> {
   const response = await fetch(TASKS_URL)
