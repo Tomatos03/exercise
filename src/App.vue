@@ -4,26 +4,40 @@ import AppShell from './components/AppShell.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import { confirmKey } from '@/composables/useConfirm'
 
-const dialogOpen = ref(false)
-const message = ref('')
-const confirmText = ref('确定')
+interface ConfirmRequest {
+  message: string
+  confirmText: string
+  resolve: (ok: boolean) => void
+}
 
-let resolver: ((ok: boolean) => void) | null = null
+const current = ref<ConfirmRequest | null>(null)
+const queue: ConfirmRequest[] = []
+const dialogOpen = ref(false)
+
+function showNext() {
+  if (dialogOpen.value) return
+
+  const next = queue.shift()
+  if (!next) return
+
+  current.value = next
+  dialogOpen.value = true
+}
 
 function confirmFn(text: string, okText = '确定'): Promise<boolean> {
-  message.value = text
-  confirmText.value = okText
-  dialogOpen.value = true
-
   return new Promise<boolean>((resolve) => {
-    resolver = resolve
+    queue.push({ message: text, confirmText: okText, resolve })
+    showNext()
   })
 }
 
 function answer(ok: boolean) {
+  const req = current.value
+  current.value = null
   dialogOpen.value = false
-  resolver?.(ok)
-  resolver = null
+
+  req?.resolve(ok)
+  showNext()
 }
 
 provide(confirmKey, confirmFn)
@@ -36,8 +50,8 @@ provide(confirmKey, confirmFn)
 
   <ConfirmDialog
     v-model="dialogOpen"
-    :message="message"
-    :confirm-text="confirmText"
+    :message="current?.message ?? ''"
+    :confirm-text="current?.confirmText"
     @confirm="answer(true)"
     @cancel="answer(false)"
   />

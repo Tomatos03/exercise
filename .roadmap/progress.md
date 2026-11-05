@@ -303,6 +303,16 @@
 - `TodoView` 的 `handleClear` 与 `TaskDetailView` 的离开守卫都改成 `await confirm(...)`
 - 已知缺陷：`resolver` 只有一个，并发调用会覆盖（第一个 await 永不结束）
 
+### 第 34 步 · 修复并发缺陷（队列）
+
+- 缺陷：单槽位 `resolver` 被第二次调用覆盖 → 第一个 `await` 永久 pending，弹窗文字也被覆盖
+- 修复：`queue` 先进先出 + `current` 表示正在显示的请求，`showNext()` 只在空闲时取队首
+- `new Promise` 的 executor 是**同步立即执行**：登记 resolve + 入队 + `showNext()`；真正结算发生在用户点击时
+- `dialogOpen` 只由 `showNext()` / `answer()` 控制，**不要在 `confirmFn` 里手动设 true**
+- `queue.shift()` 返回 `T | undefined`，必须判空
+- 测试 `src/__tests__/confirm.spec.ts`：用"探针组件 inject"取出服务，再点真实按钮；覆盖 确定/取消/并发排队 三个场景
+- 用过变异验证：把队列改回"直接覆盖 current"，并发用例立即失败（弹窗显示“第二次”）
+
 ## 当前项目结构
 
 ```
@@ -335,6 +345,7 @@ src/
     ├── tasks.spec.ts            # store 增删改查与派生数据
     ├── useFilteredTasks.spec.ts # composable 筛选/搜索逻辑
     ├── storage.spec.ts          # localStorage 读写与容错
+    ├── confirm.spec.ts          # 确认服务：确定/取消/并发排队
     └── TaskCard.spec.ts         # 组件渲染 + emit 契约
 ```
 
