@@ -341,6 +341,20 @@
   - 覆盖：请求地址、字段映射（`completed` → `done`、忽略多余字段）、非 2xx 报错、JSON 异常、网络异常
   - `await expect(promise).rejects.toThrow('...')` 测抛错
 
+### 第 38 步 · 搜索防抖与 URL 状态同步
+
+- 防抖：`searchInput`（输入值）与 `keyword`（生效值）分开，`watch` + `setTimeout(300)`，每次先 `clearTimeout`；`onUnmounted` 里清理
+- URL 读（三个工具函数）：
+  - `readQueryString`：`route.query.q` 可能是 `null` / 数组，非字符串一律当 `''`
+  - `parseFilter`：白名单校验，非法值兑底为 `'all'`
+  - `readListQuery`：统一入口，返回完整合法的 `ListQuery`
+- URL 写：`buildListQuery(state, base)` 合并现有参数（`...base`），默认值写 `undefined`（等于删除该参数）
+- 规范化（B4）：用 `router.resolve({ query }).fullPath` 与 `route.fullPath` 比较，**只在地址不干净时** `replace`
+- 双向同步（B5）：`watch(() => route.query, ...)` 读回状态；开头的“值相同就 return”用来防回环
+- 类型方向：`LocationQuery`（读，`string \| null` 或数组）→ `LocationQueryRaw`（写，允许 `number` / `undefined`）
+- 关键认知：**地址栏回车 = 整页重载**（setup 重跑）；页面内改 query 不重载，所以需要 B5
+- 防抖放在页面而非 composable：否则 `useFilteredTasks` 的 5 个用例都要引入假定时器
+
 ## 当前项目结构
 
 ```
@@ -382,7 +396,7 @@ src/
 
 ## 下一步
 
-1. 搜索防抖 + 筛选条件同步到 URL（`?q=买&filter=done`，刷新/分享可保留）
+1. 分页或视图切换（`?page=` / `?view=`），复用 `readListQuery` / `buildListQuery` 模式
 2. 页面切换动画：`<Transition mode="out-in">`
 3. 自定义指令：`v-focus` 等
 4. 进阶工程化：打包体积分析、CI、ESLint 规则收紧
