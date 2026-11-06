@@ -25,6 +25,7 @@ function ensureOk(response: Response) {
 }
 
 export async function fetchTasks(page = 1, pageSize = 5): Promise<TaskPage> {
+  // await new Promise((resolve) => setTimeout(resolve, 1500)) // 添加延迟, 验证骨架屏效果
   const response = await fetch(`${BASE_URL}/todos?_page=${page}&_limit=${pageSize}`)
   ensureOk(response)
 

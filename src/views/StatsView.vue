@@ -21,6 +21,12 @@ const rate = computed(() =>
       </div>
     </div>
 
+    <!-- 加载失败：错误提示 + 重试 -->
+    <div v-else-if="store.error" class="stats__error">
+      <p>加载失败：{{ store.error }}</p>
+      <button @click="store.loadTasks()">重试</button>
+    </div>
+
     <!-- 加载完：真实数字 -->
     <div v-else class="stats__grid">
       <div class="stats__card">
@@ -89,5 +95,17 @@ const rate = computed(() =>
   50% {
     opacity: 0.35;
   }
+}
+
+.stats__error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--color-danger);
+}
+
+.stats__error p {
+  margin: 0;
 }
 </style>

@@ -428,6 +428,19 @@
 - `@keyframes` 只写 `50%`，`0%` / `100%` 自动补成原值，形成 1 → 0.35 → 1 的呼吸
 - 验证必须限速（DevTools → Slow 3G），本地 mock 太快时骨架一闪而过是正常的
 
+### 第 45 步 · 加载失败状态与骨架屏的时机
+
+- 三态变四态：`loading` → 骨架；`error` → 红字 + 重试；否则 → 数字
+- `v-if` / `v-else-if` / `v-else` 是从上到下**命中即停**，`loading` 放最前
+- `store.error` 是 `ref('')`，空串是 falsy，直接 `v-else-if="store.error"`
+- **`@click="store.loadTasks()"` 括号不能省**：不写就把 `MouseEvent` 当成 `targetPage` 传进去
+- 验证错误态必须**刷新页面**：`loaded` 为 true 且同页时守卫直接放行，不会重新请求
+- **骨架屏"看不到"的真正原因**：路由组件懒加载与数据请求**并行赛跑**
+  - 守卫一调用 `loadTasks` 就发请求，同时浏览器还在下载 `StatsView.vue`
+  - 组件渲染出来时数据已经回来，`loading` 已变 `false`，骨架的生命期被吃掉了
+- 想胉眼确认：临时在 `fetchTasks` 里 `await new Promise(r => setTimeout(r, 1500))`（验证完删），或 Slow 3G + 第二次刷新（模块已缓存）
+- 代码本身不用改：本地 mock + 组件已在缓存时骨架自然更快，这是环境问题而不是 bug
+
 ## 当前项目结构
 
 ```
@@ -473,7 +486,7 @@ src/
 
 ## 下一步
 
-1. 错误态：Stats 页现在加载失败也会显示 `0`，应当区分 `store.error`
+1. 生产构建产物：看 `pnpm build` 输出的 chunk 划分，弄明白懒加载为什么会产生独立文件
 2. 工程化：打包体积分析 / CI / ESLint 规则收紧
 
 ## 踩过的坑（备忘）
