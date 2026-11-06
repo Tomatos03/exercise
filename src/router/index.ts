@@ -10,6 +10,11 @@ const router = createRouter({
     { path: '/about', name: 'about', component: () => import('../views/AboutView.vue') },
     { path: '/stats', name: 'stats', component: () => import('../views/StatsView.vue') },
     {
+      path: '/table',
+      name: 'task-table',
+      component: () => import('../views/TaskTableView.vue'),
+    },
+    {
       path: '/tasks/:id',
       name: 'task-detail',
       component: () => import('../views/TaskDetailView.vue'),

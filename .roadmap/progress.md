@@ -538,14 +538,35 @@
 - 验证：`/stats` 返回 10/2；页面 10/2/8/20%；在列表页翻页不影响；标记完成后回 Stats 数字变化
 - 未动：Todo 页底部“已完成 X 张”仍是当前页口径，留作后续单独一步
 
+### 第 51 步 · Element Plus 试点（按需引入 + 表格视图）
+
+- 目标：不动已被测试覆盖的 `TaskCard` / `ConfirmDialog`，用新的 `/table` 页面试点
+- 按需引入：`unplugin-vue-components` + `unplugin-auto-import` + `ElementPlusResolver`
+  - 组件、组件样式、`v-loading` 指令都由插件按需注入
+  - `main.ts` 不再 `app.use(ElementPlus)`，也不再引 `element-plus/dist/index.css`
+  - 只保留 `element-plus/theme-chalk/dark/css-vars.css` 的全局暗色变量
+  - 生成的 `components.d.ts` / `auto-imports.d.ts` 要加进 `tsconfig.app.json` 的 include
+    - 否则 `vue-tsc` 不认识 `el-*` 和 `v-loading`（`vLoading` 在 `GlobalDirectives` 里）
+- 暗色主题：Element Plus 认 `html.dark`，项目认 `data-theme`，`useTheme` 里同时设置两者
+- `/table` 页面：`el-table` + `el-table-column` + `el-tag` + `el-button` + `el-alert` + `el-pagination` + `v-loading`
+  - 数据复用 task store；分页调用 `store.loadTasks(page)`
+  - `el-table` 插槽里的 `row` 是 EP 的 `DefaultRow`（`Record<PropertyKey, any>`），不能直接当 `Task` 传
+  - 这里只取 `Number(row.id)` 调 `toggleCard`，避免 `DefaultRow` 与 `Task` 的类型冲突
+- 体积对比（Element Plus 2.14.7）：
+  - 首屏主包几乎不变：约 64 kB / gzip 25 kB
+  - 表格路由单独加载：270 kB / gzip 91 kB + CSS 95 kB / gzip 13 kB
+  - 结论：按需引入把库关进了“用到它的路由 chunk”，没有污染首屏
+- 验证：`pnpm type-check`、`pnpm build-only`、36 个测试通过；无头 Chrome 渲染 5 行任务、2 页分页，亮/暗截图正常
+- 未动：主题色仍是 Element Plus 默认蓝，和现有绿色品牌不一致；中文 locale 未配
+
 ## 当前项目结构
 
 ```
 src/
 ├── App.vue                  # 外壳 + 确认服务接线 + 路由过渡（<Transition mode="out-in">）
-├── main.ts                  # createApp + Pinia + Router + 全局样式
+├── main.ts                  # createApp + Pinia + Router + 全局样式 + Element Plus 暗色变量
 ├── assets/main.css          # 全局基础层：reset + CSS 变量（亮/暗两套） + 基础排版
-├── router/index.ts          # /、/about、/stats、/tasks/:id（stats 页跳过列表守卫）
+├── router/index.ts          # /、/table、/about、/stats、/tasks/:id（stats 跳过列表守卫）
 ├── api/tasks.ts             # fetchTasks(分页 + 排序) + fetchStats(全库统计) + createTask / updateTask / deleteTask
 ├── types.ts                 # 领域类型 Task
 ├── directives/
@@ -555,7 +576,7 @@ src/
 │   ├── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
 │   ├── useConfirmService.ts # 确认服务的实现：队列 + 弹窗状态
 │   ├── useListQuery.ts      # URL ↔ 列表状态（q / filter / page / sort / order）互转
-│   └── useTheme.ts          # 亮暗主题：null 表示未选择，跟随系统 + localStorage
+│   └── useTheme.ts          # 亮暗主题：data-theme + html.dark（Element Plus） + localStorage
 ├── stores/
 │   ├── counter.ts           # 脚手架自带，未使用
 │   └── tasks.ts             # 任务数据仓库（cards / 分页 / 排序 / 增删改）
@@ -563,10 +584,11 @@ src/
 │   ├── TodoView.vue         # 待办页（列表 + 添加 + 筛选 + 排序 + 批量操作）
 │   ├── AboutView.vue        # 关于页（占位）
 │   ├── StatsView.vue        # 统计页（服务端 /stats + 骨架屏 + 四张指标卡）
+│   ├── TaskTableView.vue    # Element Plus 试点：el-table + 分页 + 状态标签
 │   ├── TaskDetailView.vue   # 任务详情页（按 id 从 store 找任务 + 离开守卫）
 │   └── NotFoundView.vue     # 404 兜底页
 ├── components/
-│   ├── AppShell.vue         # 应用外壳：导航 + <slot />
+│   ├── AppShell.vue         # 应用外壳：导航（待办/表格/关于/统计） + <slot />
 │   ├── ConfirmDialog.vue    # 确认弹窗（Teleport + Transition + defineModel）
 │   ├── TaskCard.vue         # 单张任务卡片（props: id / title / index / done / selected；emits: remove / toggle / toggleSelect）
 │   └── TaskForm.vue         # 添加任务表单（defineModel 双向绑定 + submit 事件）
@@ -586,13 +608,17 @@ src/
 
 ```
 mock/stats.cjs               # json-server 的 /stats 聚合中间件（CommonJS）
+vite.config.ts               # Element Plus 按需引入（unplugin-vue-components / auto-import）
+components.d.ts              # 自动生成的全局组件/指令类型（需提交）
+auto-imports.d.ts            # 自动生成的 API 类型（目前为空）
 ```
 
 ## 下一步
 
-1. 工程化：打包体积分析 / CI / ESLint 规则收紧（已决定暂时跳过）
-2. 可选：Todo 页底部“已完成”改为全库口径（复用 `/stats`）
-3. 可选：组件库引入评估
+1. Element Plus 主题统一：把 `--el-color-primary` 等对齐现有绿色变量，并配置中文 locale
+2. 决定是否迁移 TodoView / TaskForm 到 Element Plus（迁移前要先处理冻结的测试）
+3. 可选：Todo 页底部“已完成”改为全库口径（复用 `/stats`）
+4. 工程化：打包体积分析 / CI / ESLint 规则收紧（暂时跳过）
 
 ## 暂缓事项
 
@@ -619,6 +645,7 @@ mock/stats.cjs               # json-server 的 /stats 聚合中间件（CommonJS
   ```
 
 - 注意：key 必须与 `useTheme.ts` 的 `STORAGE_KEY` 一致；`</script>` 不要被落在注释之外
+- 现在 Element Plus 暗色还依赖 `html.dark`：以后做 FOUC 内联脚本时，要同时 `classList.add('dark')`，否则 EP 组件首屏仍会闪
 - 决定时间：2026-11-06
 
 ### 打包体积分析与 CI —— 暂时跳过
@@ -644,4 +671,9 @@ mock/stats.cjs               # json-server 的 /stats 聚合中间件（CommonJS
 - json-server 中间件在 `"type": "module"` 项目里要用 `.cjs`：CLI 用 `require()` 加载，不是 `import`
 - 页面自己的 `loading` / `error` 不要复用 store 的列表状态，否则 Stats 会被 `/todos` 的请求拖住
 - `stats` 路由跳过守卫后，直接进 Stats 不再加载列表；再回 Todo 时守卫会补加载
+- Element Plus 按需引入时，`v-loading` 的类型在 `components.d.ts` 的 `GlobalDirectives` 里；该文件必须加进 `tsconfig.app.json` 的 include
+- `el-table` 插槽里的 `row` 是 `DefaultRow`，不是 `Task`；直接传会报 TS2345，取 `Number(row.id)` 或自己窄化
+- Element Plus 暗色认 `html.dark`；只设 `data-theme` 不会让 EP 组件变暗
+- `App.spec` 的 mock router 没有 `/table`，导航栏新增链接后会打 `No match found for location with path "/table"` 警告；测试仍通过，不是功能错误
+- 按需引入的 CSS 跟着路由 chunk 走：进入 `/table` 才加载那份 95 kB 的表格 CSS
 - 项目风格：prettier 无分号、单引号

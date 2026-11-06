@@ -22,6 +22,7 @@ watch(
   (value) => {
     if (typeof document === 'undefined') return
     document.documentElement.dataset.theme = value
+    document.documentElement.classList.toggle('dark', value === 'dark')
   },
   { immediate: true },
 )

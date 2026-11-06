@@ -8,6 +8,7 @@ const { theme, toggle } = useTheme()
   <div class="shell">
     <nav class="nav">
       <RouterLink to="/">待办</RouterLink>
+      <RouterLink to="/table">表格</RouterLink>
       <RouterLink to="/about">关于</RouterLink>
       <RouterLink to="/stats">统计</RouterLink>
       <button class="nav__theme" @click="toggle">
