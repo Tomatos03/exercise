@@ -43,7 +43,11 @@ export const useTaskStore = defineStore('tasks', () => {
 
     loading.value = true
     await run(async () => {
-      const result = await fetchTasks(targetPage, pageSize.value, targetSort, targetOrder)
+      // 不排序时保持最简调用，与既有接口契约一致
+      const result =
+        targetSort === ''
+          ? await fetchTasks(targetPage, pageSize.value)
+          : await fetchTasks(targetPage, pageSize.value, targetSort, targetOrder)
       cards.value = result.items
       page.value = result.page
       serverTotal.value = result.total
@@ -73,6 +77,17 @@ export const useTaskStore = defineStore('tasks', () => {
     })
   }
 
+  /** 批量删除：并发请求，全部成功后一次性从当前页移除 */
+  function removeCards(ids: number[]) {
+    if (ids.length === 0) return Promise.resolve()
+
+    return run(async () => {
+      await Promise.all(ids.map((id) => deleteTask(id)))
+      cards.value = cards.value.filter((card) => !ids.includes(card.id))
+      serverTotal.value = Math.max(0, serverTotal.value - ids.length)
+    })
+  }
+
   function toggleCard(id: number) {
     const card = cards.value.find((item) => item.id === id)
     if (!card) return Promise.resolve()
@@ -80,6 +95,19 @@ export const useTaskStore = defineStore('tasks', () => {
     return run(async () => {
       const updated = await updateTask(id, { done: !card.done })
       card.done = updated.done
+    })
+  }
+
+  /** 批量设置完成状态：只对状态不一致的任务发请求 */
+  function setDoneMany(ids: number[], done: boolean) {
+    const targets = cards.value.filter((card) => ids.includes(card.id) && card.done !== done)
+    if (targets.length === 0) return Promise.resolve()
+
+    return run(async () => {
+      await Promise.all(targets.map((card) => updateTask(card.id, { done })))
+      targets.forEach((card) => {
+        card.done = done
+      })
     })
   }
 
@@ -106,7 +134,9 @@ export const useTaskStore = defineStore('tasks', () => {
     finished,
     addCard,
     removeCard,
+    removeCards,
     toggleCard,
+    setDoneMany,
     clearAll,
     loading,
     loadTasks,

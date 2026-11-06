@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onUnmounted, ref, watch } from 'vue'
 import { vFocus } from '@/directives/focus'
 import { useRoute, useRouter } from 'vue-router'
 import { useTaskStore } from '../stores/tasks'
@@ -108,6 +108,31 @@ watch(
   },
 )
 
+// 批量选择：只存 id，避免和卡片数据不同步
+const selectedIds = ref<number[]>([])
+
+const allSelected = computed(
+  () =>
+    visibleCards.value.length > 0 &&
+    visibleCards.value.every((card) => selectedIds.value.includes(card.id)),
+)
+
+function toggleSelect(id: number) {
+  selectedIds.value = selectedIds.value.includes(id)
+    ? selectedIds.value.filter((item) => item !== id)
+    : [...selectedIds.value, id]
+}
+
+function toggleSelectAll() {
+  const pageIds = visibleCards.value.map((card) => card.id)
+
+  if (allSelected.value) {
+    selectedIds.value = selectedIds.value.filter((id) => !pageIds.includes(id))
+  } else {
+    selectedIds.value = [...new Set([...selectedIds.value, ...pageIds])]
+  }
+}
+
 // 事件处理
 function addCard() {
   store.addCard(content.value)
@@ -127,6 +152,28 @@ async function handleClear() {
   if (!confirm) return
   const ok = await confirm('确定清空全部任务吗？这个操作不可撤销。', '清空')
   if (ok) store.clearAll()
+}
+
+async function handleBatchDone(done: boolean) {
+  if (selectedIds.value.length === 0) return
+  // 保留选中状态，方便接着执行其他批量操作
+  await store.setDoneMany(selectedIds.value, done)
+}
+
+async function handleBatchDelete() {
+  const count = selectedIds.value.length
+  if (count === 0 || !confirm) return
+
+  const ok = await confirm(`确定删除选中的 ${count} 个任务吗？这个操作不可撤销。`, '删除')
+  if (!ok) return
+
+  await store.removeCards(selectedIds.value)
+  selectedIds.value = []
+
+  // 当前页被删空且不是第 1 页时，退回上一页
+  if (store.cards.length === 0 && store.page > 1) {
+    store.loadTasks(store.page - 1)
+  }
 }
 
 // 清理
@@ -160,6 +207,19 @@ onUnmounted(() => {
     </div>
     <button @click="autoFocus = !autoFocus">autoFocus toggle</button>
 
+    <div class="todo__select-bar">
+      <label>
+        <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
+        全选本页
+      </label>
+      <template v-if="selectedIds.length > 0">
+        <span>已选 {{ selectedIds.length }} 项</span>
+        <button class="todo__batch-done" @click="handleBatchDone(true)">标记完成</button>
+        <button class="todo__batch-done" @click="handleBatchDone(false)">标记未完成</button>
+        <button class="todo__batch-delete" @click="handleBatchDelete">删除选中</button>
+      </template>
+    </div>
+
     <p v-if="visibleCards.length === 0" class="todo__empty">没有符合条件的卡片</p>
 
     <TransitionGroup name="list" tag="div" class="todo__list">
@@ -170,8 +230,10 @@ onUnmounted(() => {
         :title="item.title"
         :index="(store.page - 1) * store.pageSize + index"
         :done="item.done"
+        :selected="selectedIds.includes(item.id)"
         @remove="store.removeCard(item.id)"
         @toggle="store.toggleCard(item.id)"
+        @toggle-select="toggleSelect(item.id)"
       />
     </TransitionGroup>
 
@@ -263,6 +325,35 @@ onUnmounted(() => {
   margin: 0;
   color: var(--color-muted);
   font-size: 0.875rem;
+}
+
+.todo__select-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.todo__batch-delete {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+  background-color: transparent;
+  font-size: 0.8125rem;
+}
+
+.todo__batch-done {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background-color: transparent;
+  font-size: 0.8125rem;
+}
+
+.todo__batch-delete:hover:not(:disabled) {
+  color: var(--color-surface);
+  background-color: var(--color-danger);
 }
 
 .todo__error {

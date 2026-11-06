@@ -476,6 +476,28 @@
 - 中文按标题排序是 **UTF-16 码点**顺序，不是拼音（需要 `localeCompare` 或后端拼音字段）
 - 已有遗留：`pnpm lint` 在 `__tests__` 里有 5 个 `vi.fn()` 缺类型参数的错误（既有问题，按约定不修）
 
+### 第 48 步 · 批量选择、批量完成、批量删除
+
+- **选择控件用 `<span role="checkbox">`，不是 `input`**：旧测试 `get('input[type="checkbox"]')` 和 `get('button')` 都要求唯一匹配
+  - 按约定不改测试 → 用 ARIA 方案：`role` + `aria-checked` + `tabindex="0"` + 空格/回车处理
+- 选中集合只存 `id[]`（任务会被改名/切换，存对象就是旧快照）；`filter` / 展开都是重新赋值
+- 全选基于 `visibleCards`（当前页 + 筛选结果），不是整库
+- 卡片布局：左选择（方形）| 中标题 `flex: 1` + `min-width: 0` | 右操作区（胶囊完成开关 + 删除）
+  - **`min-width: 0`** 是让长标题换行而不是撑破布局的关键
+  - 根节点用 `is-done` 而不是 `done`：`text-decoration` 会**继承给所有后代**，加在根上整张卡都会被划掉
+  - 勾号颜色用 `var(--color-bg)`：亮色下近白、暗色下近黑，两种主题都有反差
+  - `accent-color: var(--color-primary)` 让原生 checkbox 跟随主题
+  - 完成开关用 `<label>` 包裹，点文字也能切换
+- 批量删除：`Promise.all` 并发 N 个 `DELETE`
+  - REST **没有批量删除标准**（资源导向 + 部分失败/事务/权限/锁表难统一），json-server 也不提供
+  - 告取舍：`Promise.all` 任一条失败就整体 reject，已删的不会回滚
+- 批量完成：`setDoneMany` 只对 `card.done !== done` 的目标发请求
+  - 不能复用 `toggleCard`：它是取反，选中的已完成任务会变成未完成
+- 删除后清空选中（卡片已不存在）；批量完成**保留**选中（可以接着删）
+- 当前页被删空且 `page > 1` 时退回上一页
+- 顺手修复：`useTheme` 在 jsdom 下 `matchMedia` 不存在导致 `App.spec` 整个套件挂掉 → 加环境降级（顺便兼容 SSR）
+- `loadTasks` 在 `targetSort === ''` 时只传两个参数，保持 `tasks.spec` 的 `toHaveBeenCalledWith(1, 5)` 契约
+
 ## 当前项目结构
 
 ```
@@ -498,7 +520,7 @@ src/
 │   ├── counter.ts           # 脚手架自带，未使用
 │   └── tasks.ts             # 任务数据仓库（cards / 分页 / 排序 / 增删改）
 ├── views/
-│   ├── TodoView.vue         # 待办页（列表 + 添加 + 筛选）
+│   ├── TodoView.vue         # 待办页（列表 + 添加 + 筛选 + 排序 + 批量操作）
 │   ├── AboutView.vue        # 关于页（占位）
 │   ├── StatsView.vue        # 统计页（加载中骨架屏 + 四张指标卡）
 │   ├── TaskDetailView.vue   # 任务详情页（按 id 从 store 找任务 + 离开守卫）
@@ -506,7 +528,7 @@ src/
 ├── components/
 │   ├── AppShell.vue         # 应用外壳：导航 + <slot />
 │   ├── ConfirmDialog.vue    # 确认弹窗（Teleport + Transition + defineModel）
-│   ├── TaskCard.vue         # 单张任务卡片（props: id / title / index / done；emits: remove / toggle）
+│   ├── TaskCard.vue         # 单张任务卡片（props: id / title / index / done / selected；emits: remove / toggle / toggleSelect）
 │   └── TaskForm.vue         # 添加任务表单（defineModel 双向绑定 + submit 事件）
 └── __tests__/
     ├── App.spec.ts              # App 外壳渲染（需手动注入 pinia + router）
@@ -522,9 +544,8 @@ src/
 
 ## 下一步
 
-1. B：批量操作（复选框多选 + 批量完成 / 删除）
-2. C：键盘快捷键（`/` 聚焦搜索、`n` 新建、`Esc` 取消）
-3. 工程化：打包体积分析 / CI / ESLint 规则收紧
+1. C：键盘快捷键（`/` 聚焦搜索、`n` 新建、`Esc` 取消）
+2. 工程化：打包体积分析 / CI / ESLint 规则收紧
 
 ## 暂缓事项
 

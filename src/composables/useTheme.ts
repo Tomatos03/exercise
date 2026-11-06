@@ -10,6 +10,8 @@ function readSavedTheme(): Theme | null {
 }
 
 function getSystemTheme(): Theme {
+  // jsdom / SSR 等环境没有 matchMedia，降级到亮色
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'light'
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
@@ -18,6 +20,7 @@ const theme = ref<Theme>(readSavedTheme() ?? getSystemTheme())
 watch(
   theme,
   (value) => {
+    if (typeof document === 'undefined') return
     document.documentElement.dataset.theme = value
   },
   { immediate: true },
@@ -33,8 +36,10 @@ export function useTheme() {
 }
 
 // 系统主题变了，只有"用户没手动选过"才跟随
-const media = window.matchMedia('(prefers-color-scheme: dark)')
-media.addEventListener('change', (event) => {
-  if (readSavedTheme() !== null) return
-  theme.value = event.matches ? 'dark' : 'light'
-})
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+  const media = window.matchMedia('(prefers-color-scheme: dark)')
+  media.addEventListener('change', (event) => {
+    if (readSavedTheme() !== null) return
+    theme.value = event.matches ? 'dark' : 'light'
+  })
+}
