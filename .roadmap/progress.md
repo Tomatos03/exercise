@@ -118,12 +118,22 @@
 - 结果：EP 组件与自定义组件的颜色、4px 圆角、阴影一致；暗色自动跟随。
 - 以后换品牌色：改 EP 的 `--el-color-primary` 或 SCSS 主题，不要再写两套 `--color-*`。
 
+### 第 53 步 · Element Plus 中文 locale
+
+- 新建入口 `AppRoot.vue`：`<el-config-provider :locale="zhCn">` 包住 `App`；`main.ts` 改为挂 `AppRoot`。
+- 为什么不在 `App.vue` 里包：`App.spec` 会 `mount(App)`，auto-import 会把 Element Plus 的 CSS 带进 Vitest，报 `Unknown file extension ".css"`；把 provider 放入口，`App` 保持 provider-free，测试不受影响。
+- `zhCn` 来自 `element-plus/es/locale/lang/zh-cn`；`ElConfigProvider` 通过 provide/inject 把 locale 传给所有后代，不需要 `app.use(ElementPlus)`。
+- 分页加上 `layout="total, prev, pager, next"`，EP 中文 locale 显示“共 10 条”，顺便验证 locale 生效。
+- 体积代价：入口挂 ConfigProvider + 中文语言包后，主包约 88 kB / gzip 35 kB（此前约 64/25）；换来了全站 EP 文案中文化。
+- 验证：36 个测试通过、`pnpm type-check` / `pnpm build-only` 通过；DOM 确认“共 10 条”。
+
 ## 当前项目结构
 
 ```
 src/
+├── AppRoot.vue              # 入口 provider：ElConfigProvider + zhCn
 ├── App.vue                  # 外壳 + 确认服务接线 + 路由过渡
-├── main.ts                  # createApp + Pinia + Router + 全局样式 + EP 暗色变量
+├── main.ts                  # createApp(AppRoot) + Pinia + Router + 全局样式 + EP 暗色变量
 ├── assets/main.css          # reset + 设计令牌（映射 EP 主题） + 基础排版
 ├── router/index.ts          # /、/table、/about、/stats、/tasks/:id（stats 跳过列表守卫）
 ├── api/tasks.ts             # 分页/排序 + fetchStats + 增删改
@@ -155,10 +165,9 @@ src/
 
 ## 下一步
 
-1. Element Plus 中文 locale：`ElConfigProvider` + 分页 `layout="total, ..."` 验证。
-2. 决定是否迁移 TodoView / TaskForm 到 Element Plus（迁移前先处理冻结测试）。
-3. 可选：Todo 页底部“已完成”改为全库口径（复用 `/stats`）。
-4. 工程化：打包体积分析 / CI / ESLint 规则收紧（暂时跳过）。
+1. 决定是否迁移 TodoView / TaskForm 到 Element Plus（迁移前先处理冻结测试）。
+2. 可选：Todo 页底部“已完成”改为全库口径（复用 `/stats`）。
+3. 工程化：打包体积分析 / CI / ESLint 规则收紧（暂时跳过）。
 
 ## 暂缓事项
 
@@ -195,4 +204,6 @@ src/
 - 按需引入的 CSS 跟着路由 chunk 走，进 `/table` 才加载表格 CSS。
 - 主题只留一个源头：`--color-*` 映射 `--el-*`；不要在 `main.css` 再覆盖一套 `--el-*`。
 - `var(--el-xxx, fallback)` 的 fallback 很重要：按需 CSS 没加载时颜色不会失效。
+- `ElConfigProvider` 直接放进 `App.vue` 会让 `App.spec` 通过 auto-import 引入 EP CSS，Vitest 报 `Unknown file extension ".css"`；provider 放到入口 `AppRoot.vue`，`App` 保持可测。
+- `ElConfigProvider` 不产生额外 DOM；中文 locale 下分页 total 显示“共 N 条”。
 - 项目风格：Prettier 无分号、单引号。

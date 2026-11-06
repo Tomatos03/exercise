@@ -55,11 +55,10 @@ function toggleDone(id: number) {
     </el-table>
 
     <div class="table-view__footer">
-      <span>共 {{ store.serverTotal }} 张</span>
       <el-pagination
         v-if="store.serverTotal > 0"
         background
-        layout="prev, pager, next"
+        layout="total, prev, pager, next"
         :total="store.serverTotal"
         :page-size="store.pageSize"
         :current-page="store.page"
@@ -97,7 +96,7 @@ function toggleDone(id: number) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: var(--space-3);
   color: var(--color-muted);
   font-size: 0.875rem;
