@@ -460,6 +460,22 @@
 - 媒体查询 vs JS：媒体查询由渲染引擎在布局阶段处理、不占主线程、首屏即正确；JS 方案要多绕一圈且会闪
 - 已验证：/手动切换、刷新记住、首次读系统、系统变化实时跟随、手动选择后不再跟随
 
+### 第 47 步 · 列表排序（服务端排序 + URL 同步）
+
+- 链路：`api`（拼 `_sort`/`_order`）→ `store`（`sort`/`order` + `setSort`）→ 控件 → URL
+- **后端字段名与领域模型不一致**：`toTask` 做读方向（`completed → done`），`toRemoteSort` 做写方向（`done → completed`），**两个方向必须成对**
+  - 第一版只做了读方向，导致“按状态排序无效果”（服务端根本没有 `done` 字段）
+- 拼参数用 `URLSearchParams`：自动处理 `?` / `&` / 编码，不用手拼字符串
+- **排序变化必须回第 1 页**：页码的含义变了，还停在第 3 页会莫名其妙
+- `loadTasks(page, sort, order)` 成为统一入口，守卫 / `setSort` / 翻页 / 重试全走它
+- **类型搬到 `types.ts`**：凡是跨两个以上层使用的类型，就不该留在 `api/` 里（否则 composable 要反向依赖 api）
+- 守卫必须同时比较 `page + sort + order`，否则同页码只改排序时会被误判为“已加载”而不再请求
+- `useListQuery`：`parseSort` / `parseOrder` 用白名单；默认值不写进 URL（`sort === ''` 时 `order` 也不写）
+- 双向同步：控件 → `store.setSort` → `watch` 写 URL；`route.query` 变化 → 同步回控件（用 `same` 判断防止来回导航）
+- 两个边界：无排序字段时禁用升降序按钮；切回“默认顺序”时把 `order` 重置为 `asc`
+- 中文按标题排序是 **UTF-16 码点**顺序，不是拼音（需要 `localeCompare` 或后端拼音字段）
+- 已有遗留：`pnpm lint` 在 `__tests__` 里有 5 个 `vi.fn()` 缺类型参数的错误（既有问题，按约定不修）
+
 ## 当前项目结构
 
 ```
@@ -468,7 +484,7 @@ src/
 ├── main.ts                  # createApp + Pinia + Router + 全局样式
 ├── assets/main.css          # 全局基础层：reset + CSS 变量（亮/暗两套） + 基础排版
 ├── router/index.ts          # /、/about、/stats、/tasks/:id
-├── api/tasks.ts             # fetchTasks(分页) + createTask / updateTask / deleteTask
+├── api/tasks.ts             # fetchTasks(分页 + 排序) + createTask / updateTask / deleteTask
 ├── types.ts                 # 领域类型 Task
 ├── directives/
 │   └── focus.ts             # v-focus：mounted 默认聚焦，updated 仅在 false → true 时补聚焦
@@ -476,11 +492,11 @@ src/
 │   ├── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
 │   ├── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
 │   ├── useConfirmService.ts # 确认服务的实现：队列 + 弹窗状态
-│   ├── useListQuery.ts      # URL ↔ 列表状态（q / filter / page）互转
+│   ├── useListQuery.ts      # URL ↔ 列表状态（q / filter / page / sort / order）互转
 │   └── useTheme.ts          # 亮暗主题：null 表示未选择，跟随系统 + localStorage
 ├── stores/
 │   ├── counter.ts           # 脚手架自带，未使用
-│   └── tasks.ts             # 任务数据仓库（cards / total / finished / 增删改）
+│   └── tasks.ts             # 任务数据仓库（cards / 分页 / 排序 / 增删改）
 ├── views/
 │   ├── TodoView.vue         # 待办页（列表 + 添加 + 筛选）
 │   ├── AboutView.vue        # 关于页（占位）
@@ -506,8 +522,9 @@ src/
 
 ## 下一步
 
-1. 工程化：打包体积分析 / CI / ESLint 规则收紧
-2. 可选：组件库引入评估 / Stats 页指标改为服务端统计
+1. B：批量操作（复选框多选 + 批量完成 / 删除）
+2. C：键盘快捷键（`/` 聚焦搜索、`n` 新建、`Esc` 取消）
+3. 工程化：打包体积分析 / CI / ESLint 规则收紧
 
 ## 暂缓事项
 

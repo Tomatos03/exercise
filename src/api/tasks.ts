@@ -1,4 +1,4 @@
-import type { Task } from '../types'
+import type { SortOrder, Task, TaskSort } from '../types'
 
 interface RemoteTask {
   id: number
@@ -20,13 +20,34 @@ function toTask(item: RemoteTask): Task {
   return { id: item.id, title: item.title, done: item.completed }
 }
 
+/** 前端领域字段 → 服务端字段（与 toTask 的反方向映射配对） */
+function toRemoteSort(field: TaskSort): string {
+  return field === 'done' ? 'completed' : field
+}
+
 function ensureOk(response: Response) {
   if (!response.ok) throw new Error(`请求失败：${response.status}`)
 }
 
-export async function fetchTasks(page = 1, pageSize = 5): Promise<TaskPage> {
+export async function fetchTasks(
+  page = 1,
+  pageSize = 5,
+  sort: TaskSort | '' = '',
+  order: SortOrder = 'asc',
+): Promise<TaskPage> {
   // await new Promise((resolve) => setTimeout(resolve, 1500)) // 添加延迟, 验证骨架屏效果
-  const response = await fetch(`${BASE_URL}/todos?_page=${page}&_limit=${pageSize}`)
+  const params = new URLSearchParams({
+    _page: String(page),
+    _limit: String(pageSize),
+  })
+
+  // 不传 sort 就保持服务端默认顺序
+  if (sort !== '') {
+    params.set('_sort', toRemoteSort(sort))
+    params.set('_order', order)
+  }
+
+  const response = await fetch(`${BASE_URL}/todos?${params.toString()}`)
   ensureOk(response)
 
   const data = (await response.json()) as RemoteTask[]

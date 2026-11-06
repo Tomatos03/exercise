@@ -25,15 +25,21 @@ const router = createRouter({
 // 首次导航时确保数据已加载：所有页面共享同一份列表
 router.beforeEach((to) => {
   const store = useTaskStore()
-  const target = readListQuery(to.query).page
+  const target = readListQuery(to.query)
 
   // 正在加载就不要重复请求
   if (store.loading) return true
-  // 已加载且就在目标页，也不用再请求
-  if (store.loaded && store.page === target) return true
+
+  // 已加载、页码和排序都没变，就不用再请求
+  const same =
+    store.loaded &&
+    store.page === target.page &&
+    store.sort === target.sort &&
+    store.order === target.order
+  if (same) return true
 
   // 故意不 await：导航不阻塞，数据回来后页面会自动更新
-  store.loadTasks(target)
+  store.loadTasks(target.page, target.sort, target.order)
   return true
 })
 

@@ -8,6 +8,7 @@ import TaskForm from '@/components/TaskForm.vue'
 import { useFilteredTasks } from '@/composables/useFilteredTasks'
 import { confirmKey } from '@/composables/useConfirm'
 import { buildListQuery, readListQuery } from '@/composables/useListQuery'
+import type { SortOrder, TaskSort } from '@/types'
 
 // 外部依赖
 const store = useTaskStore()
@@ -26,6 +27,21 @@ const content = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 const autoFocus = ref(true)
 
+// 排序：初始值来自 URL，控件变化时写回 store
+const sortField = ref<TaskSort | ''>(initialQuery.sort)
+const sortOrder = ref<SortOrder>(initialQuery.order)
+
+function handleSortChange() {
+  // 没有排序字段时，升降序没有意义，重置成默认值
+  if (sortField.value === '') sortOrder.value = 'asc'
+  store.setSort(sortField.value, sortOrder.value)
+}
+
+function toggleOrder() {
+  sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+  handleSortChange()
+}
+
 // 规范化地址栏, 防止用户手动输入不规范的查询参数
 // 注意：page 用 initialQuery.page，不能用 store.page（守卫还在异步加载目标页）
 const normalizedQuery = buildListQuery(
@@ -33,6 +49,8 @@ const normalizedQuery = buildListQuery(
     keyword: initialQuery.keyword,
     filter: initialQuery.filter,
     page: initialQuery.page,
+    sort: initialQuery.sort,
+    order: initialQuery.order,
   },
   route.query,
 )
@@ -48,10 +66,16 @@ watch(searchInput, (value) => {
   }, 300)
 })
 
-// 过滤条件 / 关键字 / 页码变化时同步 URL 查询参数
-watch([filter, keyword, () => store.page], () => {
+// 过滤条件 / 关键字 / 页码 / 排序变化时同步 URL 查询参数
+watch([filter, keyword, () => store.page, () => store.sort, () => store.order], () => {
   const next = buildListQuery(
-    { keyword: keyword.value.trim(), filter: filter.value, page: store.page },
+    {
+      keyword: keyword.value.trim(),
+      filter: filter.value,
+      page: store.page,
+      sort: store.sort,
+      order: store.order,
+    },
     route.query,
   )
 
@@ -67,12 +91,20 @@ watch(
   (query) => {
     const next = readListQuery(query)
 
+    const same =
+      next.filter === filter.value &&
+      next.keyword === keyword.value &&
+      next.sort === sortField.value &&
+      next.order === sortOrder.value
+
     // 值没变就直接返回 —— 防止和我们自己的写回形成来回导航
-    if (next.filter === filter.value && next.keyword === keyword.value) return
+    if (same) return
 
     filter.value = next.filter
     keyword.value = next.keyword
     searchInput.value = next.keyword
+    sortField.value = next.sort
+    sortOrder.value = next.order
   },
 )
 
@@ -114,6 +146,16 @@ onUnmounted(() => {
         <button :class="{ active: filter === 'all' }" @click="filter = 'all'">全部</button>
         <button :class="{ active: filter === 'active' }" @click="filter = 'active'">未完成</button>
         <button :class="{ active: filter === 'done' }" @click="filter = 'done'">已完成</button>
+      </div>
+      <div class="todo__sort">
+        <select v-model="sortField" @change="handleSortChange">
+          <option value="">默认顺序</option>
+          <option value="title">按标题</option>
+          <option value="done">按状态</option>
+        </select>
+        <button :disabled="sortField === ''" @click="toggleOrder">
+          {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
+        </button>
       </div>
     </div>
     <button @click="autoFocus = !autoFocus">autoFocus toggle</button>
@@ -185,6 +227,20 @@ onUnmounted(() => {
 .todo__filters .active {
   color: var(--color-primary);
   border-color: var(--color-primary);
+}
+
+.todo__sort {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.todo__sort select {
+  padding: var(--space-1) var(--space-2);
+  color: inherit;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
 }
 
 .todo__actions {

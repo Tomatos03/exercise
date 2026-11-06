@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { createTask, deleteTask, fetchTasks, updateTask } from '../api/tasks'
-import type { Task } from '../types'
+import type { SortOrder, Task, TaskSort } from '../types'
 
 export const useTaskStore = defineStore('tasks', () => {
   const cards = ref<Task[]>([])
@@ -13,6 +13,10 @@ export const useTaskStore = defineStore('tasks', () => {
   const page = ref(1)
   const pageSize = ref(5)
   const serverTotal = ref(0)
+
+  // 排序状态：'' 表示不排序，保持服务端默认顺序
+  const sort = ref<TaskSort | ''>('')
+  const order = ref<SortOrder>('asc')
 
   const total = computed(() => cards.value.length)
   const finished = computed(() => cards.value.filter((card) => card.done).length)
@@ -28,16 +32,29 @@ export const useTaskStore = defineStore('tasks', () => {
     }
   }
 
-  async function loadTasks(targetPage = page.value) {
+  async function loadTasks(
+    targetPage = page.value,
+    targetSort = sort.value,
+    targetOrder = order.value,
+  ) {
+    // 先记下状态，后续 watch / 守卫读到的才是真实生效的值
+    sort.value = targetSort
+    order.value = targetOrder
+
     loading.value = true
     await run(async () => {
-      const result = await fetchTasks(targetPage, pageSize.value)
+      const result = await fetchTasks(targetPage, pageSize.value, targetSort, targetOrder)
       cards.value = result.items
       page.value = result.page
       serverTotal.value = result.total
       loaded.value = true
     })
     loading.value = false
+  }
+
+  /** 排序变化后必须回到第 1 页：页码的含义已经变了 */
+  function setSort(nextSort: TaskSort | '', nextOrder: SortOrder = 'asc') {
+    return loadTasks(1, nextSort, nextOrder)
   }
 
   function addCard(title: string) {
@@ -100,5 +117,8 @@ export const useTaskStore = defineStore('tasks', () => {
     serverTotal,
     totalPages,
     loaded,
+    sort,
+    order,
+    setSort,
   }
 })
