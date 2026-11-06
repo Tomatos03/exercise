@@ -416,6 +416,18 @@
 - 指令只负责 `focus()`，**从不 `blur()`**："关掉开关"不会自己失焦，"打开开关"才补聚焦
 - 验证聚焦必须**先失焦**（点标题），因为已聚焦元素再 `focus()` 是空动作；本项目 `input:focus` 边框变主色是最好的肉眼看点
 
+### 第 44 步 · 加载状态（骨架屏）
+
+- 现象：直接打开 `/stats` 先闪一下 `0%`，因为守卫不 `await`，页面先渲染了一次"没数据"的样子
+- 根源：`0` 是合法数字，`number` 类型表达不出"还不知道"——**空状态 ≠ 加载状态**
+- 三态：`store.loading` → 骨架；否则 → 真实数字（真的 0 才放心显示）
+- `v-if` / `v-else` 分两套 DOM（结构与内容本来就不同），而不是 `v-show`（两套都真实创建）
+- `v-for="n in 4"` 是数字循环，等价于生成 1~4，适合"复制 n 个同样盒子"
+- 骨架尺寸 `width: 60px` + `height: 1.75rem` 对齐真实数字，避免数据回来时布局跳动（CLS）
+- `span` 设了 `display: block` 才能生效 `width` / `height`
+- `@keyframes` 只写 `50%`，`0%` / `100%` 自动补成原值，形成 1 → 0.35 → 1 的呼吸
+- 验证必须限速（DevTools → Slow 3G），本地 mock 太快时骨架一闪而过是正常的
+
 ## 当前项目结构
 
 ```
@@ -439,7 +451,7 @@ src/
 ├── views/
 │   ├── TodoView.vue         # 待办页（列表 + 添加 + 筛选）
 │   ├── AboutView.vue        # 关于页（占位）
-│   ├── StatsView.vue        # 统计页
+│   ├── StatsView.vue        # 统计页（加载中骨架屏 + 四张指标卡）
 │   ├── TaskDetailView.vue   # 任务详情页（按 id 从 store 找任务 + 离开守卫）
 │   └── NotFoundView.vue     # 404 兜底页
 ├── components/
@@ -461,7 +473,7 @@ src/
 
 ## 下一步
 
-1. Stats 页骨架屏（`store.loading`）
+1. 错误态：Stats 页现在加载失败也会显示 `0`，应当区分 `store.error`
 2. 工程化：打包体积分析 / CI / ESLint 规则收紧
 
 ## 踩过的坑（备忘）

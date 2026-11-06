@@ -13,7 +13,16 @@ const rate = computed(() =>
   <section class="stats">
     <h1>统计</h1>
 
-    <div class="stats__grid">
+    <!-- 加载中：灰色占位条 -->
+    <div v-if="store.loading" class="stats__grid">
+      <div v-for="n in 4" :key="n" class="stats__card">
+        <span class="stats__label">加载中…</span>
+        <span class="stats__skeleton"></span>
+      </div>
+    </div>
+
+    <!-- 加载完：真实数字 -->
+    <div v-else class="stats__grid">
       <div class="stats__card">
         <span class="stats__label">全部</span>
         <strong class="stats__value">{{ store.total }}</strong>
@@ -64,5 +73,21 @@ const rate = computed(() =>
 .stats__value {
   font-size: 1.75rem;
   color: var(--color-primary);
+}
+
+/* 骨架屏占位条：呼吸式闪烁 */
+.stats__skeleton {
+  display: block;
+  width: 60px;
+  height: 1.75rem;
+  border-radius: 4px;
+  background-color: var(--color-border);
+  animation: stats-pulse 1s ease-in-out infinite;
+}
+
+@keyframes stats-pulse {
+  50% {
+    opacity: 0.35;
+  }
 }
 </style>
