@@ -441,13 +441,32 @@
 - 想胉眼确认：临时在 `fetchTasks` 里 `await new Promise(r => setTimeout(r, 1500))`（验证完删），或 Slow 3G + 第二次刷新（模块已缓存）
 - 代码本身不用改：本地 mock + 组件已在缓存时骨架自然更快，这是环境问题而不是 bug
 
+### 第 46 步 · 亮暗主题与系统偏好
+
+- CSS 变量层：`:root[data-theme='dark']` 覆盖同名变量，**组件一行不用改**
+- 选择器 `:root[data-theme='dark']`：伪类 + 属性选择器**连写无空格** = 同一元素同时满足；有空格就变成后代选择器
+- 优先级 `(0,2,0)` > `(0,1,0)`，**与书写顺序无关**
+- CSS 变量会**继承**，所以定义在 `<html>`（`:root`）上就能全站生效
+- `color-scheme: dark` 让滚动条、输入框、下拉等**浏览器原生控件**一起变暗
+- `document.documentElement.dataset.theme = 'dark'`：`document`（文档）→ `.documentElement`（`<html>`）→ `.dataset`（`data-*` 集合）→ `.theme`；等价于 `setAttribute('data-theme','dark')`
+  - 驼峰 ↔ 连字符：`dataset.userId` ↔ `data-user-id`；`<html>` 不是 `document.body`
+- **JS 全程不碰颜色**，只改一个字符串；颜色归属 CSS
+- `ref` 必须定义在 `useTheme` **函数外**，全应用一份（同 Pinia 单例的道理）
+- 用 `null` 表示"用户没选过"：`Theme \| null` 是 `'light' \| 'dark'` 表达不出的第三态
+- **`localStorage` 的写入时机 = 用户表过态**：写在 `watch` 里会在首屏偷偷写，从此永远"已选择"；写在 `toggle` 里才对
+- `matchMedia('(prefers-color-scheme: dark)')` 返回 `MediaQueryList`：`.matches` + `.addEventListener('change')`
+  - 这是**浏览器/系统**推给你的事件，和 `watch` 监听变量完全不同
+- 系统偏好变化时先判断 `readSavedTheme() !== null`，**用户选过就不跟随**（人的选择优先于环境）
+- 媒体查询 vs JS：媒体查询由渲染引擎在布局阶段处理、不占主线程、首屏即正确；JS 方案要多绕一圈且会闪
+- 已验证：/手动切换、刷新记住、首次读系统、系统变化实时跟随、手动选择后不再跟随
+
 ## 当前项目结构
 
 ```
 src/
 ├── App.vue                  # 外壳 + 确认服务接线 + 路由过渡（<Transition mode="out-in">）
 ├── main.ts                  # createApp + Pinia + Router + 全局样式
-├── assets/main.css          # 全局基础层：reset + CSS 变量 + 基础排版
+├── assets/main.css          # 全局基础层：reset + CSS 变量（亮/暗两套） + 基础排版
 ├── router/index.ts          # /、/about、/stats、/tasks/:id
 ├── api/tasks.ts             # fetchTasks(分页) + createTask / updateTask / deleteTask
 ├── types.ts                 # 领域类型 Task
@@ -457,7 +476,8 @@ src/
 │   ├── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
 │   ├── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
 │   ├── useConfirmService.ts # 确认服务的实现：队列 + 弹窗状态
-│   └── useListQuery.ts      # URL ↔ 列表状态（q / filter / page）互转
+│   ├── useListQuery.ts      # URL ↔ 列表状态（q / filter / page）互转
+│   └── useTheme.ts          # 亮暗主题：null 表示未选择，跟随系统 + localStorage
 ├── stores/
 │   ├── counter.ts           # 脚手架自带，未使用
 │   └── tasks.ts             # 任务数据仓库（cards / total / finished / 增删改）
@@ -486,8 +506,35 @@ src/
 
 ## 下一步
 
-1. 生产构建产物：看 `pnpm build` 输出的 chunk 划分，弄明白懒加载为什么会产生独立文件
-2. 工程化：打包体积分析 / CI / ESLint 规则收紧
+1. 工程化：打包体积分析 / CI / ESLint 规则收紧
+2. 可选：组件库引入评估 / Stats 页指标改为服务端统计
+
+## 暂缓事项
+
+### 暗色主题首屏防闪（FOUC）—— 用户决定暂时不做
+
+- 现象：暗色用户刷新页面会先看到一帧亮色（网络越慢越明显）
+- 原因：浏览器先画第一帧，Vue 启动后才贴 `data-theme`
+- 方案：在 `index.html` 的 `<head>` 里、`<meta charset>` 之后插入**内联脚本**
+  - 不能抽成外部文件（多一次网络请求，抢不到时间）
+  - 不能用 `type="module"`（默认 defer，等 HTML 解析完才执行）
+  - 必须 `try/catch`（隐私模式下 `localStorage` 会抛错）
+- 代码：
+
+  ```html
+  <script>
+    try {
+      const saved = localStorage.getItem('theme')
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+      if (saved === 'dark' || (saved === null && prefersDark)) {
+        document.documentElement.dataset.theme = 'dark'
+      }
+    } catch {}
+  </script>
+  ```
+
+- 注意：key 必须与 `useTheme.ts` 的 `STORAGE_KEY` 一致；`</script>` 不要被落在注释之外
+- 决定时间：2026-11-06
 
 ## 踩过的坑（备忘）
 
@@ -498,4 +545,6 @@ src/
 - 模板里 `:title="x"` 传表达式，`title="x"` 传字面字符串
 - 路由参数 `route.params.id` 是字符串，和数字 id 比较前要 `Number()`
 - 同一个组件被复用时（如 `/tasks/1` → `/tasks/2`），普通变量不会更新，要用 `computed`
+- `preview` 只读 `dist/`，改了源码必须先 `pnpm build`，否则看到的还是旧产物
+- HTML 注释里不能出现 `--`，否则会提前终止注释；注释整段脚本时 `</script>` 也要包进去
 - 项目风格：prettier 无分号、单引号

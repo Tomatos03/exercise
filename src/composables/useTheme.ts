@@ -19,15 +19,22 @@ watch(
   theme,
   (value) => {
     document.documentElement.dataset.theme = value
-    localStorage.setItem(STORAGE_KEY, value)
   },
   { immediate: true },
 )
 
 export function useTheme() {
   function toggle() {
-    theme.value = theme.value === 'dark' ? 'light' : 'dark'
+    const next: Theme = theme.value === 'dark' ? 'light' : 'dark'
+    theme.value = next
+    localStorage.setItem(STORAGE_KEY, next)
   }
-
   return { theme, toggle }
 }
+
+// 系统主题变了，只有"用户没手动选过"才跟随
+const media = window.matchMedia('(prefers-color-scheme: dark)')
+media.addEventListener('change', (event) => {
+  if (readSavedTheme() !== null) return
+  theme.value = event.matches ? 'dark' : 'light'
+})
