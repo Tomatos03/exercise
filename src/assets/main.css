@@ -1,17 +1,17 @@
 /* ① 全局基础层：reset + 设计令牌 + 基础排版 */
 
 :root {
-  /* 颜色 */
-  --color-primary: #42b883;
-  --color-text: #2c3e50;
-  --color-muted: #909399;
-  --color-border: #e5e7eb;
-  --color-bg: #f7f8fa;
-  --color-surface: #ffffff;
-  --color-danger: #e74c3c;
+  /* 颜色：统一映射到 Element Plus 的主题变量 */
+  --color-primary: var(--el-color-primary, #409eff);
+  --color-text: var(--el-text-color-primary, #303133);
+  --color-muted: var(--el-text-color-secondary, #909399);
+  --color-border: var(--el-border-color, #dcdfe6);
+  --color-bg: var(--el-bg-color-page, #f2f3f5);
+  --color-surface: var(--el-bg-color, #ffffff);
+  --color-danger: var(--el-color-danger, #f56c6c);
 
   /* 尺寸 */
-  --radius: 8px;
+  --radius: var(--el-border-radius-base, 4px);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -19,23 +19,14 @@
   --space-6: 24px;
 
   /* 阴影 */
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 8%);
+  --shadow-sm: var(--el-box-shadow-lighter, 0 0 6px rgb(0 0 0 / 12%));
 }
 
-/* 暗色主题：只覆盖变量，组件一行都不用改 */
+/* 暗色主题：颜色由 Element Plus 的 html.dark 变量接管，
+   这里只保留原生控件的 color-scheme */
 :root[data-theme='dark'] {
   /* 让滚动条、输入框、下拉等浏览器原生控件跟着变暗 */
   color-scheme: dark;
-
-  --color-primary: #4fd1a5;
-  --color-text: #e5e7eb;
-  --color-muted: #9ca3af;
-  --color-border: #3a3f47;
-  --color-bg: #16181d;
-  --color-surface: #22252b;
-  --color-danger: #f87171;
-
-  --shadow-sm: 0 1px 3px rgb(0 0 0 / 40%);
 }
 
 *,
