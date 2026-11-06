@@ -116,6 +116,7 @@ onUnmounted(() => {
         <button :class="{ active: filter === 'done' }" @click="filter = 'done'">已完成</button>
       </div>
     </div>
+    <button @click="autoFocus = !autoFocus">autoFocus toggle</button>
 
     <p v-if="visibleCards.length === 0" class="todo__empty">没有符合条件的卡片</p>
 
