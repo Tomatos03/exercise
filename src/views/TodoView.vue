@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { inject, onUnmounted, ref, watch } from 'vue'
+import { vFocus } from '@/directives/focus'
 import { useRoute, useRouter } from 'vue-router'
 import { useTaskStore } from '../stores/tasks'
 import TaskCard from '../components/TaskCard.vue'
@@ -23,6 +24,7 @@ keyword.value = initialQuery.keyword
 const searchInput = ref(initialQuery.keyword)
 const content = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | undefined
+const autoFocus = ref(true)
 
 // 规范化地址栏, 防止用户手动输入不规范的查询参数
 // 注意：page 用 initialQuery.page，不能用 store.page（守卫还在异步加载目标页）
@@ -107,7 +109,7 @@ onUnmounted(() => {
     <h1>待办</h1>
 
     <div class="todo__toolbar">
-      <input v-model="searchInput" placeholder="搜索任务" />
+      <input v-focus="autoFocus" v-model="searchInput" placeholder="搜索任务" />
       <div class="todo__filters">
         <button :class="{ active: filter === 'all' }" @click="filter = 'all'">全部</button>
         <button :class="{ active: filter === 'active' }" @click="filter = 'active'">未完成</button>

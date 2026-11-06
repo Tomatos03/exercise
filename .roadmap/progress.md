@@ -400,6 +400,22 @@
 - 动画本身靠 CSS：`fade-enter-active` / `fade-leave-active` / `fade-enter-from` / `fade-leave-to`，前缀来自 `name="fade"`
 - `scoped` 能命中页面组件根元素，因为父组件 scoped 样式会作用到子组件根节点
 
+### 第 43 步 · 自定义指令 `v-focus`
+
+- 指令 = 给 DOM 元素"挂行为"的可复用方式；`focus()`、滚动定位、第三方库初始化这类**命令式**操作，用数据表达不出来
+- 指令对象共 7 个钩子：`created` / `beforeMount` / `mounted` / `beforeUpdate` / `updated` / `beforeUnmount` / `unmounted`
+  - `mounted` 做初始化，`updated` 做同步，`unmounted` 做清理（**成对出现**）
+- `<script setup>` 里变量名以 `v` 开头即可直接用：`vFocus` → 模板 `v-focus`，**不需要 `app.directive()` 全局注册**
+- `Directive<El, Value, Modifiers, Arg>` 四个泛型，**写在指令对象上、所有钩子共享一份**
+  - 钩子参数固定 4 个 `(el, binding, vnode, prevVNode)`，和泛型**不是按位置一一对应**
+  - `prevVNode` 类型随钩子变（`mounted` 里是 `null`），不归你声明
+- 函数简写 `Directive = (el, binding) => {}` 等价于同时写 `mounted` + `updated`
+- 条件聚焦：`binding.value === false` 才跳过，**不要写 `!binding.value`**（`v-focus` 无值时是 `undefined`，也要默认聚焦）
+- `binding.oldValue`：上一次变更前的值，`mounted` 里是 `undefined`
+- `updated` 每次组件更新都跑，所以只在 `false → true` 跃迁时 `focus()`，否则打字/点筛选都会抢焦点
+- 指令只负责 `focus()`，**从不 `blur()`**："关掉开关"不会自己失焦，"打开开关"才补聚焦
+- 验证聚焦必须**先失焦**（点标题），因为已聚焦元素再 `focus()` 是空动作；本项目 `input:focus` 边框变主色是最好的肉眼看点
+
 ## 当前项目结构
 
 ```
@@ -410,6 +426,8 @@ src/
 ├── router/index.ts          # /、/about、/stats、/tasks/:id
 ├── api/tasks.ts             # fetchTasks(分页) + createTask / updateTask / deleteTask
 ├── types.ts                 # 领域类型 Task
+├── directives/
+│   └── focus.ts             # v-focus：mounted 默认聚焦，updated 仅在 false → true 时补聚焦
 ├── composables/
 │   ├── useFilteredTasks.ts  # 筛选 + 搜索逻辑（getCards 用 getter 传入）
 │   ├── useConfirm.ts        # 确认服务：InjectionKey + ConfirmFn 类型
@@ -443,9 +461,8 @@ src/
 
 ## 下一步
 
-1. 自定义指令：`v-focus` 等
-2. Stats 页骨架屏（`store.loading`）
-3. 工程化：打包体积分析 / CI / ESLint 规则收紧
+1. Stats 页骨架屏（`store.loading`）
+2. 工程化：打包体积分析 / CI / ESLint 规则收紧
 
 ## 踩过的坑（备忘）
 
