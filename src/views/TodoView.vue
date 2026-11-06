@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { vFocus } from '@/directives/focus'
 import { useRoute, useRouter } from 'vue-router'
 import { useTaskStore } from '../stores/tasks'
@@ -176,9 +176,46 @@ async function handleBatchDelete() {
   }
 }
 
+// 搜索框 DOM：用于快捷键主动聚焦
+const searchEl = ref<HTMLInputElement | null>(null)
+const formRef = ref<InstanceType<typeof TaskForm> | null>(null)
+
+function isEditable(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+}
+
+function handleHotkey(event: KeyboardEvent) {
+  // 正在输入框里打字，不抢按键
+  if (isEditable(event.target)) return
+
+  if (event.key === '/') {
+    event.preventDefault()
+    searchEl.value?.focus()
+    return
+  }
+  if (event.key === 'n') {
+    event.preventDefault()
+    formRef.value?.focus()
+    return
+  }
+}
+
+function handleSearchEscape() {
+  searchInput.value = ''
+  // 立即生效，不等 300ms 防抖
+  keyword.value = ''
+  searchEl.value?.blur()
+}
+
 // 清理
+onMounted(() => {
+  window.addEventListener('keydown', handleHotkey)
+})
+
 onUnmounted(() => {
   clearTimeout(searchTimer)
+  window.removeEventListener('keydown', handleHotkey)
 })
 </script>
 
@@ -188,7 +225,13 @@ onUnmounted(() => {
     <h1>待办</h1>
 
     <div class="todo__toolbar">
-      <input v-focus="autoFocus" v-model="searchInput" placeholder="搜索任务" />
+      <input
+        ref="searchEl"
+        v-focus="autoFocus"
+        v-model="searchInput"
+        placeholder="搜索任务（按 / 聚焦）"
+        @keydown.esc="handleSearchEscape"
+      />
       <div class="todo__filters">
         <button :class="{ active: filter === 'all' }" @click="filter = 'all'">全部</button>
         <button :class="{ active: filter === 'active' }" @click="filter = 'active'">未完成</button>
@@ -243,7 +286,7 @@ onUnmounted(() => {
       <button :disabled="store.page === store.totalPages" @click="nextPage">下一页</button>
     </div>
 
-    <TaskForm v-model="content" @submit="addCard" />
+    <TaskForm ref="formRef" v-model="content" @submit="addCard" />
 
     <div class="todo__actions">
       <button @click="store.loadTasks()">从服务器加载</button>

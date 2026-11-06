@@ -1,12 +1,20 @@
 <script setup lang="ts">
-const value = defineModel<string>({ required: true })
+import { ref } from 'vue';
 
+const value = defineModel<string>({ required: true })
 const emit = defineEmits<{ submit: [] }>()
+const inputRef = ref<HTMLInputElement | null>(null)
+
+function focus() {
+  inputRef.value?.focus()
+}
+
+defineExpose({ focus })
 </script>
 
  <template>
    <form class="task-form" @submit.prevent="emit('submit')">
-    <input v-model="value" placeholder="输入任务内容" />
+    <input ref="inputRef" v-model="value" placeholder="输入任务内容（按 n 聚焦）" />
     <button type="submit" :disabled="value.trim() === ''">添加</button>
   </form>
 </template>

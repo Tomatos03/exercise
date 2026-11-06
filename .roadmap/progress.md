@@ -498,6 +498,24 @@
 - 顺手修复：`useTheme` 在 jsdom 下 `matchMedia` 不存在导致 `App.spec` 整个套件挂掉 → 加环境降级（顺便兼容 SSR）
 - `loadTasks` 在 `targetSort === ''` 时只传两个参数，保持 `tasks.spec` 的 `toHaveBeenCalledWith(1, 5)` 契约
 
+### 第 49 步 · 键盘快捷键（`/` 与 `n`）
+
+- 全局监听：`window.addEventListener('keydown', fn)`，必须在 `onUnmounted` 里 `removeEventListener`
+  - 不移除的后果：来回切页面几次，按一次键触发多次
+- **`isEditable(event.target)` 是第一道门**：`INPUT` / `TEXTAREA` / `isContentEditable` 三种都要查
+  - 漏一个就会出现“某个框里打不出 `/` 或 `n`”
+- `event.target` = 按键发生时**焦点所在**的元素（事件从焦点元素冒泡到 window）
+- `/` 要 `preventDefault()`：阻止 Firefox 的快速查找等默认行为
+- `Esc` 清搜索：同时清 `searchInput`（输入框）和 `keyword`（实际筛选值），否则要等 300ms 防抖
+- **组件 ref 拿到的是实例，不是 DOM**：`searchEl` 是 `HTMLInputElement`，`formRef` 是组件实例
+- `InstanceType<typeof TaskForm>` 才能让 TS 知道实例上有 `focus()`
+- `defineExpose` 是 `<script setup>` 的“后门”：不写则子组件内部全部封闭
+  - 暴露的 `ref` 在父组件侧**自动解包**（`formRef.value.draft` 直接是值，不是 `.value`）
+  - **只暴露行为（`focus()`），不暴露状态**：状态属于子组件，该走 props / emits
+  - 判断标准：“它变的时候需要通知别人吗？”需要→状态；不需要，只是“帮我做件事”→能力
+- 三个通信方向：`props` 父→子（数据）、`emits` 子→父（事件）、`expose` 父→子（调用）
+- 界面细节：`placeholder` 里透出快捷键，否则用户永远不知道
+
 ## 当前项目结构
 
 ```
@@ -544,8 +562,8 @@ src/
 
 ## 下一步
 
-1. C：键盘快捷键（`/` 聚焦搜索、`n` 新建、`Esc` 取消）
-2. 工程化：打包体积分析 / CI / ESLint 规则收紧
+1. 工程化：打包体积分析 / CI / ESLint 规则收紧
+2. 可选：Stats 页指标改为服务端统计 / 组件库引入评估
 
 ## 暂缓事项
 
