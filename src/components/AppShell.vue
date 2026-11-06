@@ -1,9 +1,18 @@
+<script setup lang="ts">
+import { useTheme } from '@/composables/useTheme'
+
+const { theme, toggle } = useTheme()
+</script>
+
 <template>
   <div class="shell">
     <nav class="nav">
       <RouterLink to="/">待办</RouterLink>
       <RouterLink to="/about">关于</RouterLink>
       <RouterLink to="/stats">统计</RouterLink>
+      <button class="nav__theme" @click="toggle">
+        {{ theme === 'dark' ? '☀️' : '🌙' }}
+      </button>
     </nav>
     <main class="main">
       <slot />
@@ -46,5 +55,12 @@
   max-width: 720px;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
+}
+
+.nav__theme {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
 }
 </style>
