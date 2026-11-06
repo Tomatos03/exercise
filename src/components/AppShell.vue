@@ -11,9 +11,9 @@ const { theme, toggle } = useTheme()
       <RouterLink to="/table">表格</RouterLink>
       <RouterLink to="/about">关于</RouterLink>
       <RouterLink to="/stats">统计</RouterLink>
-      <button class="nav__theme" @click="toggle">
+      <el-button class="nav__theme" text @click="toggle">
         {{ theme === 'dark' ? '☀️' : '🌙' }}
-      </button>
+      </el-button>
     </nav>
     <main class="main">
       <slot />

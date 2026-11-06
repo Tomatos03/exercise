@@ -51,17 +51,13 @@ function handleSelect() {
     </div>
 
     <div class="task-card__actions">
-      <label class="task-card__toggle">
-        <input
-          type="checkbox"
-          :checked="done"
-          aria-label="切换完成状态"
-          @change="handleToggle"
-        />
+      <el-checkbox class="task-card__toggle" :model-value="done" @change="handleToggle">
         <span class="task-card__status">{{ done ? '已完成' : '未完成' }}</span>
-      </label>
+      </el-checkbox>
 
-      <button class="task-card__remove" @click="handleRemove">删除</button>
+      <el-button class="task-card__remove" type="danger" link @click="handleRemove">
+        删除
+      </el-button>
     </div>
   </div>
 </template>
@@ -150,28 +146,20 @@ function handleSelect() {
   gap: var(--space-2);
 }
 
-/* 完成开关：原生 checkbox + 文字，点文字也能切换 */
+/* 完成开关：Element Plus checkbox + 文字，点文字也能切换 */
 .task-card__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
+  margin-right: 0;
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: 999px;
-  cursor: pointer;
-  user-select: none;
 }
 
 .task-card__toggle:hover {
   border-color: var(--color-primary);
 }
 
-.task-card__toggle input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--color-primary);
-  cursor: pointer;
+.task-card__toggle :deep(.el-checkbox__label) {
+  padding-left: var(--space-1);
 }
 
 .task-card__status {
@@ -187,16 +175,7 @@ function handleSelect() {
 
 .task-card__remove {
   flex: none;
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-danger);
-  border-color: transparent;
-  background-color: transparent;
   font-size: 0.8125rem;
-}
-
-.task-card__remove:hover:not(:disabled) {
-  color: var(--color-danger);
-  border-color: var(--color-danger);
 }
 
 .done {

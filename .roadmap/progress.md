@@ -127,6 +127,46 @@
 - 体积代价：入口挂 ConfigProvider + 中文语言包后，主包约 88 kB / gzip 35 kB（此前约 64/25）；换来了全站 EP 文案中文化。
 - 验证：36 个测试通过、`pnpm type-check` / `pnpm build-only` 通过；DOM 确认“共 10 条”。
 
+### 第 54 步 · 迁移 TaskForm 到 Element Plus
+
+- 只迁移未被测试覆盖的 `TaskForm`；`TaskCard` / `ConfirmDialog` / `AppShell` 仍被冻结测试锁定。
+- 用 `el-input` + `el-button`，保留 `defineModel`、`defineExpose({ focus })` 和 `submit` 事件；`TodoView` 不用改。
+- `focus()` 的类型从 `HTMLInputElement` 换成 `InputInstance`，调用 `ElInput` 暴露的 `focus()`。
+- `el-button` 用 `native-type="submit"`，继续走 `<form @submit.prevent>`；`clearable` 提供清空按钮。
+- 验证：36 个测试通过、type-check/build 通过；真实 Chrome 按 `n` 能聚焦 `.el-input__inner`。
+- 代价：`TodoView` 是静态导入，EP 的 input/button 代码进入主包（约 115 kB / gzip 43 kB）。
+- 未动：`TaskCard` / `ConfirmDialog`；它们断言具体 DOM/emit 契约，且 EP 组件 CSS 会让 Vitest 报 `Unknown file extension ".css"`。要迁移需先解冻测试或给 Vitest 加 CSS 处理。
+
+### 第 55 步 · 迁移 Stats / About / 404 到 Element Plus
+
+- 这三个页面都没有被测试挂载，属于安全迁移范围。
+- `StatsView`：`el-row` + `el-col` + `el-card` + `el-skeleton` + `el-alert` + `el-button`；四张指标卡由 `metrics` computed 生成。
+- `AboutView`：`el-card` + `el-space` + `el-tag`，技术栈从 `<ul>` 改成标签云。
+- `NotFoundView`：`el-result` + `el-button`；用 `router.push('/')` 而不是把按钮塞进 `RouterLink`，避免嵌套交互元素。
+- 验证：36 个测试通过、type-check/build 通过；Stats 显示 10/2/8/20%，404 正常；About 在无头 Chrome 的虚拟时间下会停在 `fade-enter`，真实浏览器正常（测试工具的时间冻结问题）。
+
+### 第 56 步 · 迁移 TaskCard / ConfirmDialog
+
+- 先给 Vitest 加 `server.deps.inline: ['element-plus']`，让 EP 组件和 CSS 走 Vite 转换，测试不再报 `Unknown file extension ".css"`。
+- `TaskCard`：完成开关换 `el-checkbox`，删除换 `el-button`；保留 `RouterLink` / `h2.done`。
+  - 左侧选择框仍用 ARIA `<span>`：测试要求页面里只有一个 `input[type="checkbox"]` 和一个 `button`，再放一个 EP checkbox 会破坏契约。
+- `ConfirmDialog`：两个操作按钮换 `el-button`；保留自定义 `Teleport + Transition + .mask/.dialog`。
+  - 试过 `el-dialog`，它用 `v-show`，关闭时 `.mask` 仍在 DOM 里，且内容在 transition 后才渲染，现有测试无法通过。
+- 验证：36 个测试通过、type-check/build 通过；真实 Chrome 里 5 张卡对应 5 个 checkbox / 5 个删除按钮；弹窗“取消 / 清空”正常。
+- 结论：能迁的交互控件已用 EP；剩余 DOM 是测试契约要求的兼容层，不是遗漏。
+
+### 第 57 步 · 迁移 AppShell / TodoView / TaskDetail
+
+- `AppShell`：主题切换按钮换 `el-button text`；导航仍用 `RouterLink`（语义是路由链接，不是表单控件）。
+- `TodoView`：
+  - 搜索框换 `el-input`；`v-focus` 指令改为在组件根节点里找真正的 `input`，所以能聚焦 ElInput 内部输入框。
+  - 筛选换 `el-radio-group` + `el-radio-button`；`filter` 是 `Filter` 联合类型，用 `@update:model-value` 窄化，避免 v-model 类型不匹配。
+  - 排序换 `el-select` + `el-option`，空字符串表示“默认顺序”，用 `placeholder="默认顺序"` 显示。
+  - 全选/批量按钮换 `el-checkbox` + `el-button`；空状态换 `el-empty`；分页换 `el-pagination`；错误提示换 `el-alert`。
+- `TaskDetailView`：`el-card` + `el-tag` + `el-input` + `el-button` + `el-empty`。
+- 验证：36 个测试、type-check/build 通过；Chrome 中自动聚焦搜索框，`/` 聚焦搜索、`n` 聚焦表单，筛选写入 `?filter=done`、批量选中 5 项、排序写入 `?sort=title`，详情页卡片/标签/输入框正常。
+- 仍保留的自定义结构：TaskCard 的 ARIA 选择框、ConfirmDialog 的 mask/dialog、各处 `RouterLink`。
+
 ## 当前项目结构
 
 ```
@@ -138,7 +178,7 @@ src/
 ├── router/index.ts          # /、/table、/about、/stats、/tasks/:id（stats 跳过列表守卫）
 ├── api/tasks.ts             # 分页/排序 + fetchStats + 增删改
 ├── types.ts                 # Task / TaskSort / SortOrder
-├── directives/focus.ts      # v-focus
+├── directives/focus.ts      # v-focus（支持 ElInput 内部 input）
 ├── composables/
 │   ├── useFilteredTasks.ts  # 筛选 + 搜索
 │   ├── useConfirm.ts        # 确认服务 key + 类型
@@ -147,17 +187,17 @@ src/
 │   └── useTheme.ts          # data-theme + html.dark + localStorage
 ├── stores/tasks.ts          # cards / 分页 / 排序 / 增删改
 ├── views/
-│   ├── TodoView.vue         # 待办
-│   ├── StatsView.vue        # 服务端统计 + 骨架屏
+│   ├── TodoView.vue         # 待办（EP 工具栏/列表控件）
+│   ├── StatsView.vue        # EP cards + skeleton + 服务端统计
 │   ├── TaskTableView.vue    # Element Plus 表格试点
-│   ├── TaskDetailView.vue   # 详情 + 离开守卫
-│   ├── AboutView.vue
-│   └── NotFoundView.vue
+│   ├── TaskDetailView.vue   # EP card/tag/input/button + 离开守卫
+│   ├── AboutView.vue        # EP card + 标签云
+│   └── NotFoundView.vue     # EP result
 ├── components/
-│   ├── AppShell.vue         # 导航 + <slot />
-│   ├── ConfirmDialog.vue    # Teleport + Transition
-│   ├── TaskCard.vue         # 卡片
-│   └── TaskForm.vue         # defineModel 表单
+│   ├── AppShell.vue         # EP 主题按钮 + RouterLink 导航 + <slot />
+│   ├── ConfirmDialog.vue    # EP buttons + 自定义 Teleport/mask（测试契约）
+│   ├── TaskCard.vue         # EP checkbox/button + ARIA 选择框（测试契约）
+│   └── TaskForm.vue         # EP input/button + defineModel + expose focus
 └── __tests__/               # 9 个 spec / 36 个用例（冻结，不随功能改）
 ```
 
@@ -165,9 +205,9 @@ src/
 
 ## 下一步
 
-1. 决定是否迁移 TodoView / TaskForm 到 Element Plus（迁移前先处理冻结测试）。
-2. 可选：Todo 页底部“已完成”改为全库口径（复用 `/stats`）。
-3. 工程化：打包体积分析 / CI / ESLint 规则收紧（暂时跳过）。
+1. 可选：Todo 页底部“已完成”改为全库口径（复用 `/stats`）。
+2. 工程化：打包体积分析 / CI / ESLint 规则收紧（暂时跳过）。
+3. 可选：把 `ConfirmDialog` 的 mask/dialog 也换 `el-dialog`（需先调整冻结测试）。
 
 ## 暂缓事项
 
@@ -206,4 +246,16 @@ src/
 - `var(--el-xxx, fallback)` 的 fallback 很重要：按需 CSS 没加载时颜色不会失效。
 - `ElConfigProvider` 直接放进 `App.vue` 会让 `App.spec` 通过 auto-import 引入 EP CSS，Vitest 报 `Unknown file extension ".css"`；provider 放到入口 `AppRoot.vue`，`App` 保持可测。
 - `ElConfigProvider` 不产生额外 DOM；中文 locale 下分页 total 显示“共 N 条”。
+- `TaskForm` 的 `focus()` 要用 `InputInstance`（不是 `HTMLInputElement`）；`ElInput` 自己暴露 `focus()`。
+- 被测试组件用 EP 时，Vitest 要配 `server.deps.inline: ['element-plus']`，否则报 `Unknown file extension ".css"`。
+- `TaskCard.spec` 要求只有一个 checkbox 和一个 button；所以左侧选择框保留 ARIA `span`，不能换成第二个 EP checkbox。
+- `el-dialog` 内部用 `v-show`，关闭时 `.mask` 仍在 DOM；`ConfirmDialog` 要保留自定义 mask/Teleport 才能过现有测试。
+- `TodoView` 是静态导入，`TaskForm` 里的 EP input/button 会进主包，不是路由 chunk。
+- `el-result` 的按钮用 `router.push('/')`，不要塞进 `RouterLink`：`a > button` 是嵌套交互元素。
+- `el-card` 放在 `el-col` 里要 `height: 100%`，否则同一行卡片高度不齐。
+- 无头 Chrome 的 `--virtual-time-budget` 会冻结 CSS transition，`fade-enter` 类可能一直不消失；验证过渡要用真实时间或 CDP。
+- `v-focus` 用在 `el-input` 上时，指令拿到的是根 div；要 `querySelector('input')` 再 focus。
+- `el-radio-group` 的 `update:model-value` 类型是 `string | number | boolean | undefined`；v-model 到窄联合类型会报错，用事件处理函数窄化。
+- `el-select` 的 `value=""` 选项会显示 placeholder；把 placeholder 设成“默认顺序”，空值语义也保留。
+- 垂直 flex 容器里的 `el-button` 会被拉伸；加 `align-self: flex-start`。
 - 项目风格：Prettier 无分号、单引号。

@@ -2,6 +2,7 @@
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { vFocus } from '@/directives/focus'
 import { useRoute, useRouter } from 'vue-router'
+import type { InputInstance } from 'element-plus'
 import { useTaskStore } from '../stores/tasks'
 import TaskCard from '../components/TaskCard.vue'
 import TaskForm from '@/components/TaskForm.vue'
@@ -35,6 +36,12 @@ function handleSortChange() {
   // 没有排序字段时，升降序没有意义，重置成默认值
   if (sortField.value === '') sortOrder.value = 'asc'
   store.setSort(sortField.value, sortOrder.value)
+}
+
+function handleFilterChange(value: string | number | boolean | undefined) {
+  if (value === 'all' || value === 'active' || value === 'done') {
+    filter.value = value
+  }
 }
 
 function toggleOrder() {
@@ -140,12 +147,8 @@ function addCard() {
 }
 
 // 分页只对服务端数据生效（serverTotal > 0 时）
-function prevPage() {
-  store.loadTasks(store.page - 1)
-}
-
-function nextPage() {
-  store.loadTasks(store.page + 1)
+function handlePageChange(page: number) {
+  store.loadTasks(page)
 }
 
 async function handleClear() {
@@ -176,8 +179,8 @@ async function handleBatchDelete() {
   }
 }
 
-// 搜索框 DOM：用于快捷键主动聚焦
-const searchEl = ref<HTMLInputElement | null>(null)
+// 搜索框：Element Plus 实例，用于快捷键主动聚焦
+const searchEl = ref<InputInstance | null>(null)
 const formRef = ref<InstanceType<typeof TaskForm> | null>(null)
 
 function isEditable(target: EventTarget | null) {
@@ -225,45 +228,55 @@ onUnmounted(() => {
     <h1>待办</h1>
 
     <div class="todo__toolbar">
-      <input
+      <el-input
         ref="searchEl"
         v-focus="autoFocus"
         v-model="searchInput"
+        class="todo__search"
         placeholder="搜索任务（按 / 聚焦）"
+        clearable
         @keydown.esc="handleSearchEscape"
       />
-      <div class="todo__filters">
-        <button :class="{ active: filter === 'all' }" @click="filter = 'all'">全部</button>
-        <button :class="{ active: filter === 'active' }" @click="filter = 'active'">未完成</button>
-        <button :class="{ active: filter === 'done' }" @click="filter = 'done'">已完成</button>
-      </div>
+      <el-radio-group
+        :model-value="filter"
+        class="todo__filters"
+        @update:model-value="handleFilterChange"
+      >
+        <el-radio-button value="all">全部</el-radio-button>
+        <el-radio-button value="active">未完成</el-radio-button>
+        <el-radio-button value="done">已完成</el-radio-button>
+      </el-radio-group>
       <div class="todo__sort">
-        <select v-model="sortField" @change="handleSortChange">
-          <option value="">默认顺序</option>
-          <option value="title">按标题</option>
-          <option value="done">按状态</option>
-        </select>
-        <button :disabled="sortField === ''" @click="toggleOrder">
+        <el-select
+          v-model="sortField"
+          class="todo__sort-select"
+          placeholder="默认顺序"
+          @change="handleSortChange"
+        >
+          <el-option label="默认顺序" value="" />
+          <el-option label="按标题" value="title" />
+          <el-option label="按状态" value="done" />
+        </el-select>
+        <el-button :disabled="sortField === ''" @click="toggleOrder">
           {{ sortOrder === 'asc' ? '↑ 升序' : '↓ 降序' }}
-        </button>
+        </el-button>
       </div>
     </div>
-    <button @click="autoFocus = !autoFocus">autoFocus toggle</button>
+    <el-button size="small" class="todo__debug" @click="autoFocus = !autoFocus">
+      autoFocus toggle
+    </el-button>
 
     <div class="todo__select-bar">
-      <label>
-        <input type="checkbox" :checked="allSelected" @change="toggleSelectAll" />
-        全选本页
-      </label>
+      <el-checkbox :model-value="allSelected" @change="toggleSelectAll"> 全选本页 </el-checkbox>
       <template v-if="selectedIds.length > 0">
         <span>已选 {{ selectedIds.length }} 项</span>
-        <button class="todo__batch-done" @click="handleBatchDone(true)">标记完成</button>
-        <button class="todo__batch-done" @click="handleBatchDone(false)">标记未完成</button>
-        <button class="todo__batch-delete" @click="handleBatchDelete">删除选中</button>
+        <el-button size="small" @click="handleBatchDone(true)">标记完成</el-button>
+        <el-button size="small" @click="handleBatchDone(false)">标记未完成</el-button>
+        <el-button size="small" type="danger" plain @click="handleBatchDelete">删除选中</el-button>
       </template>
     </div>
 
-    <p v-if="visibleCards.length === 0" class="todo__empty">没有符合条件的卡片</p>
+    <el-empty v-if="visibleCards.length === 0" description="没有符合条件的卡片" :image-size="80" />
 
     <TransitionGroup name="list" tag="div" class="todo__list">
       <TaskCard
@@ -280,21 +293,26 @@ onUnmounted(() => {
       />
     </TransitionGroup>
 
-    <div v-if="store.totalPages > 1" class="todo__pager">
-      <button :disabled="store.page === 1" @click="prevPage">上一页</button>
-      <span>{{ store.page }} / {{ store.totalPages }}</span>
-      <button :disabled="store.page === store.totalPages" @click="nextPage">下一页</button>
-    </div>
+    <el-pagination
+      v-if="store.totalPages > 1"
+      class="todo__pager"
+      background
+      layout="prev, pager, next"
+      :total="store.serverTotal"
+      :page-size="store.pageSize"
+      :current-page="store.page"
+      @current-change="handlePageChange"
+    />
 
     <TaskForm ref="formRef" v-model="content" @submit="addCard" />
 
     <div class="todo__actions">
-      <button @click="store.loadTasks()">从服务器加载</button>
-      <button @click="handleClear">清空全部</button>
+      <el-button @click="store.loadTasks()">从服务器加载</el-button>
+      <el-button type="danger" plain @click="handleClear">清空全部</el-button>
     </div>
 
     <p v-if="store.loading" class="todo__hint">加载中…</p>
-    <p v-if="store.error" class="todo__error">{{ store.error }}</p>
+    <el-alert v-if="store.error" :title="store.error" type="error" :closable="false" show-icon />
     <p class="todo__summary">
       共 {{ store.serverTotal || store.total }} 张，已完成 {{ store.finished }} 张
     </p>
@@ -319,19 +337,13 @@ onUnmounted(() => {
   gap: var(--space-2);
 }
 
-.todo__toolbar input {
+.todo__search {
   flex: 1;
   min-width: 180px;
 }
 
 .todo__filters {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.todo__filters .active {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+  flex: none;
 }
 
 .todo__sort {
@@ -340,12 +352,12 @@ onUnmounted(() => {
   gap: var(--space-1);
 }
 
-.todo__sort select {
-  padding: var(--space-1) var(--space-2);
-  color: inherit;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+.todo__sort-select {
+  width: 130px;
+}
+
+.todo__debug {
+  align-self: flex-start;
 }
 
 .todo__actions {
@@ -355,14 +367,9 @@ onUnmounted(() => {
 
 .todo__pager {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  color: var(--color-muted);
-  font-size: 0.875rem;
 }
 
-.todo__empty,
 .todo__hint,
 .todo__summary {
   margin: 0;
@@ -378,31 +385,8 @@ onUnmounted(() => {
   color: var(--color-muted);
 }
 
-.todo__batch-delete {
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-danger);
-  border-color: var(--color-danger);
-  background-color: transparent;
-  font-size: 0.8125rem;
-}
-
-.todo__batch-done {
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  background-color: transparent;
-  font-size: 0.8125rem;
-}
-
-.todo__batch-delete:hover:not(:disabled) {
-  color: var(--color-surface);
-  background-color: var(--color-danger);
-}
-
-.todo__error {
-  margin: 0;
-  color: var(--color-danger);
-  font-size: 0.875rem;
+.todo__select-bar :deep(.el-checkbox) {
+  margin-right: 0;
 }
 
 .todo__list {

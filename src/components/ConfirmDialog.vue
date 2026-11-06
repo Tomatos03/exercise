@@ -21,10 +21,10 @@ function cancel() {
         <div class="dialog" role="dialog" aria-modal="true">
           <p class="dialog__message">{{ message }}</p>
           <div class="dialog__actions">
-            <button @click="cancel">取消</button>
-            <button class="dialog__confirm" @click="emit('confirm')">
+            <el-button @click="cancel">取消</el-button>
+            <el-button class="dialog__confirm" type="primary" @click="emit('confirm')">
               {{ confirmText ?? '确定' }}
-            </button>
+            </el-button>
           </div>
         </div>
       </div>
@@ -61,9 +61,8 @@ function cancel() {
   gap: var(--space-2);
 }
 
-.dialog__confirm {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
+.dialog__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .fade-enter-active,
