@@ -14,6 +14,16 @@ export interface TaskPage {
   pageSize: number
 }
 
+interface RemoteStats {
+  total: number
+  completed: number
+}
+
+export interface TaskStats {
+  total: number
+  finished: number
+}
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 function toTask(item: RemoteTask): Task {
@@ -58,6 +68,14 @@ export async function fetchTasks(
   const total = Number.isNaN(parsedTotal) ? data.length : parsedTotal
 
   return { items: data.map(toTask), total, page, pageSize }
+}
+
+export async function fetchStats(): Promise<TaskStats> {
+  const response = await fetch(`${BASE_URL}/stats`)
+  ensureOk(response)
+
+  const data = (await response.json()) as RemoteStats
+  return { total: data.total, finished: data.completed }
 }
 
 export async function createTask(title: string): Promise<Task> {

@@ -1,12 +1,36 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useTaskStore } from '../stores/tasks'
+import { computed, onMounted, ref } from 'vue'
+import { fetchStats } from '../api/tasks'
+import type { TaskStats } from '../api/tasks'
 
-const store = useTaskStore()
+const stats = ref<TaskStats | null>(null)
+const loading = ref(true)
+const error = ref('')
 
-const rate = computed(() =>
-  store.total === 0 ? 0 : Math.round((store.finished / store.total) * 100),
-)
+const pending = computed(() => {
+  const current = stats.value
+  return current ? current.total - current.finished : 0
+})
+
+const rate = computed(() => {
+  const current = stats.value
+  if (!current || current.total === 0) return 0
+  return Math.round((current.finished / current.total) * 100)
+})
+
+async function loadStats() {
+  loading.value = true
+  error.value = ''
+  try {
+    stats.value = await fetchStats()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '未知错误'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadStats)
 </script>
 
 <template>
@@ -14,7 +38,7 @@ const rate = computed(() =>
     <h1>统计</h1>
 
     <!-- 加载中：灰色占位条 -->
-    <div v-if="store.loading" class="stats__grid">
+    <div v-if="loading" class="stats__grid">
       <div v-for="n in 4" :key="n" class="stats__card">
         <span class="stats__label">加载中…</span>
         <span class="stats__skeleton"></span>
@@ -22,24 +46,24 @@ const rate = computed(() =>
     </div>
 
     <!-- 加载失败：错误提示 + 重试 -->
-    <div v-else-if="store.error" class="stats__error">
-      <p>加载失败：{{ store.error }}</p>
-      <button @click="store.loadTasks()">重试</button>
+    <div v-else-if="error" class="stats__error">
+      <p>加载失败：{{ error }}</p>
+      <button @click="loadStats">重试</button>
     </div>
 
-    <!-- 加载完：真实数字 -->
-    <div v-else class="stats__grid">
+    <!-- 加载完：服务端返回的真实数字 -->
+    <div v-else-if="stats" class="stats__grid">
       <div class="stats__card">
         <span class="stats__label">全部</span>
-        <strong class="stats__value">{{ store.total }}</strong>
+        <strong class="stats__value">{{ stats.total }}</strong>
       </div>
       <div class="stats__card">
         <span class="stats__label">已完成</span>
-        <strong class="stats__value">{{ store.finished }}</strong>
+        <strong class="stats__value">{{ stats.finished }}</strong>
       </div>
       <div class="stats__card">
         <span class="stats__label">未完成</span>
-        <strong class="stats__value">{{ store.total - store.finished }}</strong>
+        <strong class="stats__value">{{ pending }}</strong>
       </div>
       <div class="stats__card">
         <span class="stats__label">完成率</span>

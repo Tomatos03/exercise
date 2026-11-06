@@ -24,6 +24,9 @@ const router = createRouter({
 
 // 首次导航时确保数据已加载：所有页面共享同一份列表
 router.beforeEach((to) => {
+  // Stats 页自己请求 /stats，不依赖任务列表
+  if (to.name === 'stats') return true
+
   const store = useTaskStore()
   const target = readListQuery(to.query)
 

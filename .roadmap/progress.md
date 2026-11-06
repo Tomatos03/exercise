@@ -1,6 +1,6 @@
 # Vue 学习路线与进度
 
-> 更新时间：2026-11-05
+> 更新时间：2026-11-06
 > 项目：`/home/tomato0v0/Projects/VueProjects/exercise`
 > 技术栈：Vue 3.5 + TypeScript + Vite + Vue Router + Pinia（pnpm 管理）
 > 启动命令：`pnpm dev`（默认 http://localhost:5173）
@@ -516,6 +516,28 @@
 - 三个通信方向：`props` 父→子（数据）、`emits` 子→父（事件）、`expose` 父→子（调用）
 - 界面细节：`placeholder` 里透出快捷键，否则用户永远不知道
 
+### 第 50 步 · Stats 页指标改为服务端统计
+
+- 旧实现：`StatsView` 用 `store.total` / `store.finished`，而这两个值来自 `cards`（只有当前页 5 条）
+  - 症状：Todo 页底部写“共 10 张”，统计页“全部”却只有 5
+  - 翻页后 `cards` 变了，统计数字也跟着变，不是全库口径
+- 为什么不在前端算：要算全库只能把所有页都拉下来，N 次请求 + 全量数据，分页就白做了
+  - 统计是聚合查询，天然属于服务端；真实后端用 SQL `COUNT`，不会把全表读进内存
+- json-server 0.17 用 `--middlewares` 挂自定义中间件（`mock/stats.cjs`）
+  - 项目是 `"type": "module"`，中间件文件必须用 `.cjs`：CLI 用 `require()` 加载，不是 `import`
+  - 中间件在 router 之前执行，`req.app.db` 是 json-server 挂上的 lowdb 实例
+  - `next()` 表示“不是我的路由”，交给后面的 json-server 处理
+- 接口：`GET /stats` → `{ total, completed }`
+  - `api/tasks.ts` 里映射成前端领域字段 `{ total, finished }`
+  - 服务端 `completed` 与前端 `finished`/`done` 的转换留在 api 层，组件不关心后端命名
+- `StatsView` 自己管理 `stats` / `loading` / `error`，不再依赖列表 store
+  - 页面级异步状态放页面里，不污染全局列表状态
+  - `pending` / `rate` 是纯展示派生值，留在 `computed`；服务端只给原始计数
+  - 每次进入页面重新挂载 → 重新请求，改完任务回来数字是新的
+- 路由守卫对 `stats` 直接放行：Stats 不需要列表数据，避免白拉一次 `/todos`
+- 验证：`/stats` 返回 10/2；页面 10/2/8/20%；在列表页翻页不影响；标记完成后回 Stats 数字变化
+- 未动：Todo 页底部“已完成 X 张”仍是当前页口径，留作后续单独一步
+
 ## 当前项目结构
 
 ```
@@ -523,8 +545,8 @@ src/
 ├── App.vue                  # 外壳 + 确认服务接线 + 路由过渡（<Transition mode="out-in">）
 ├── main.ts                  # createApp + Pinia + Router + 全局样式
 ├── assets/main.css          # 全局基础层：reset + CSS 变量（亮/暗两套） + 基础排版
-├── router/index.ts          # /、/about、/stats、/tasks/:id
-├── api/tasks.ts             # fetchTasks(分页 + 排序) + createTask / updateTask / deleteTask
+├── router/index.ts          # /、/about、/stats、/tasks/:id（stats 页跳过列表守卫）
+├── api/tasks.ts             # fetchTasks(分页 + 排序) + fetchStats(全库统计) + createTask / updateTask / deleteTask
 ├── types.ts                 # 领域类型 Task
 ├── directives/
 │   └── focus.ts             # v-focus：mounted 默认聚焦，updated 仅在 false → true 时补聚焦
@@ -540,7 +562,7 @@ src/
 ├── views/
 │   ├── TodoView.vue         # 待办页（列表 + 添加 + 筛选 + 排序 + 批量操作）
 │   ├── AboutView.vue        # 关于页（占位）
-│   ├── StatsView.vue        # 统计页（加载中骨架屏 + 四张指标卡）
+│   ├── StatsView.vue        # 统计页（服务端 /stats + 骨架屏 + 四张指标卡）
 │   ├── TaskDetailView.vue   # 任务详情页（按 id 从 store 找任务 + 离开守卫）
 │   └── NotFoundView.vue     # 404 兜底页
 ├── components/
@@ -560,10 +582,17 @@ src/
     └── TaskCard.spec.ts         # 组件渲染 + emit 契约
 ```
 
+根目录：
+
+```
+mock/stats.cjs               # json-server 的 /stats 聚合中间件（CommonJS）
+```
+
 ## 下一步
 
-1. 工程化：打包体积分析 / CI / ESLint 规则收紧
-2. 可选：Stats 页指标改为服务端统计 / 组件库引入评估
+1. 工程化：打包体积分析 / CI / ESLint 规则收紧（已决定暂时跳过）
+2. 可选：Todo 页底部“已完成”改为全库口径（复用 `/stats`）
+3. 可选：组件库引入评估
 
 ## 暂缓事项
 
@@ -592,6 +621,14 @@ src/
 - 注意：key 必须与 `useTheme.ts` 的 `STORAGE_KEY` 一致；`</script>` 不要被落在注释之外
 - 决定时间：2026-11-06
 
+### 打包体积分析与 CI —— 暂时跳过
+
+- 2026-11-06 决定：这两步先不做，优先推进功能线
+- 打包分析：需要 `rollup-plugin-visualizer` + `--mode analyze` 的独立 outDir
+- CI：需要 `.github/workflows/ci.yml`；当前 `pnpm lint` 仍会因冻结测试里的 5 个 `vitest/require-mock-type-parameters` 错误失败
+  - 处理方式（待做）：只对 `src/__tests__/**` 关掉这条规则，或解冻测试后补类型参数
+- 等需要时再补，步骤思路已在对话里讨论过
+
 ## 踩过的坑（备忘）
 
 - `cards.value.filter(...)` 不赋值 = 什么都没做
@@ -603,4 +640,8 @@ src/
 - 同一个组件被复用时（如 `/tasks/1` → `/tasks/2`），普通变量不会更新，要用 `computed`
 - `preview` 只读 `dist/`，改了源码必须先 `pnpm build`，否则看到的还是旧产物
 - HTML 注释里不能出现 `--`，否则会提前终止注释；注释整段脚本时 `</script>` 也要包进去
+- `cards` 只有当前页：`cards.length` 是 5，不是数据库里的 10；全库统计要走 `/stats`
+- json-server 中间件在 `"type": "module"` 项目里要用 `.cjs`：CLI 用 `require()` 加载，不是 `import`
+- 页面自己的 `loading` / `error` 不要复用 store 的列表状态，否则 Stats 会被 `/todos` 的请求拖住
+- `stats` 路由跳过守卫后，直接进 Stats 不再加载列表；再回 Todo 时守卫会补加载
 - 项目风格：prettier 无分号、单引号
